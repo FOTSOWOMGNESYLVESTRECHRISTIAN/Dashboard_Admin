@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -7,6 +7,8 @@ import { Textarea } from "./ui/textarea";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Switch } from "./ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -25,19 +27,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { ArrowLeft, Plus, Edit, Trash2, Check, X } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { ArrowLeft, Plus, Edit, Trash2, Check, X, Tag } from "lucide-react";
+import { toast } from "sonner";
+import { applicationService, FeaturePayload, PlanPayload } from "../services/applicationService";
+import { promotionService, PromotionPayload, Promotion } from "../services/promotionService";
+import { getUserProfile } from "../services/tokenStorage";
 
 interface Feature {
   id: string;
   name: string;
   description: string;
   key: string;
+  type?: string;
+  category?: string;
+  applicationId?: string;
 }
 
 interface PlanFeature {
   featureId: string;
-  limit: number | null; // null = illimité
+  limit: number | null;
 }
 
 interface Plan {
@@ -45,9 +53,20 @@ interface Plan {
   name: string;
   description: string;
   price: number;
-  currency: string;
   interval: "month" | "year";
   features: PlanFeature[];
+  currency?: string;
+  monthlyPrice?: number;
+  yearlyPrice?: number;
+  maxUsers?: number;
+  maxStorage?: number;
+  priority?: number;
+}
+
+interface PlanFeatureAssignmentForm {
+  featureId: string;
+  quotaLimit: string;
+  included: boolean;
 }
 
 export interface Application {
@@ -81,8 +100,68 @@ const statusLabels = {
   maintenance: "Maintenance",
 };
 
+const resolveConnectedUserId = (): string | null => {
+  const profile = getUserProfile<any>();
+  if (!profile || typeof profile !== "object") {
+    return null;
+  }
+  const candidates = [
+    profile.id,
+    profile.userId,
+    profile.userID,
+    profile.uuid,
+    profile.reference,
+    profile.accountId,
+    profile?.user?.id,
+  ];
+  const matched = candidates.find(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
+  return matched ? String(matched) : null;
+};
+
+const formatPromotionDate = (value: Promotion["startDate"]) => {
+  let parsed: Date | null = null;
+  if (Array.isArray(value) && value.length >= 3) {
+    parsed = new Date(Number(value[0]), Number(value[1]) - 1, Number(value[2]));
+  } else if (typeof value === "number") {
+    parsed = new Date(value < 1e12 ? value * 1000 : value);
+  } else if (typeof value === "string" && value) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) parsed = date;
+  }
+  return parsed ? parsed.toLocaleDateString("fr-FR") : "—";
+};
+
+const formatPromotionStatus = (promo: Promotion) => {
+  if (promo.status) return promo.status.toUpperCase();
+  return promo.active === false ? "INACTIVE" : "ACTIVE";
+};
+
+const formatPercentage = (value: number | string | undefined | null) => {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) ? `${numeric.toFixed(2)} %` : "—";
+};
+
+const formatMoney = (value: number | string | undefined | null, currency = "XAF") => {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return "—";
+  try {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numeric);
+  } catch {
+    return `${numeric.toFixed(2)} ${currency}`;
+  }
+};
+
 export function ApplicationDetails({ application, onBack, onUpdate }: ApplicationDetailsProps) {
   const [localApp, setLocalApp] = useState<Application>(application);
+  const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isAddFeatureDialogOpen, setIsAddFeatureDialogOpen] = useState(false);
   const [isEditFeatureDialogOpen, setIsEditFeatureDialogOpen] = useState(false);
   const [isDeleteFeatureDialogOpen, setIsDeleteFeatureDialogOpen] = useState(false);
@@ -92,43 +171,220 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
   const [isEditPlanDialogOpen, setIsEditPlanDialogOpen] = useState(false);
   const [isDeletePlanDialogOpen, setIsDeletePlanDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [isPromotionDialogOpen, setIsPromotionDialogOpen] = useState(false);
+  const [promotionPlan, setPromotionPlan] = useState<Plan | null>(null);
+  const [isCreatingPromotion, setIsCreatingPromotion] = useState(false);
+  const [isLoadingPromotions, setIsLoadingPromotions] = useState(false);
+  const [promotionsByPlan, setPromotionsByPlan] = useState<Record<string, Promotion[]>>({});
+  const [promotionForm, setPromotionForm] = useState({
+    code: "",
+    discountPercentage: "",
+    startDate: "",
+    endDate: "",
+    maxUsage: "",
+    minPurchaseAmount: "",
+  });
   
   const [featureForm, setFeatureForm] = useState({
     name: "",
     description: "",
     key: "",
+    type: "payment",
+    category: "finance",
   });
 
   const [planForm, setPlanForm] = useState({
     name: "",
     description: "",
-    price: 0,
-    currency: "EUR",
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    maxUsers: 0,
+    priority: 1,
     interval: "month" as "month" | "year",
     features: [] as PlanFeature[],
   });
+  const [isSavingFeature, setIsSavingFeature] = useState(false);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
+  const [isAssignFeatureToPlanOpen, setIsAssignFeatureToPlanOpen] = useState(false);
+  const [planToAssignFeature, setPlanToAssignFeature] = useState<Plan | null>(null);
+  const [planFeatureAssignment, setPlanFeatureAssignment] = useState<PlanFeatureAssignmentForm>({
+    featureId: "",
+    quotaLimit: "",
+    included: true,
+  });
+  const [isAssigningPlanFeature, setIsAssigningPlanFeature] = useState(false);
+
+  useEffect(() => {
+    setLocalApp(application);
+  }, [application]);
+
+  const loadFeatures = useCallback(
+    async (appId: string) => {
+      setIsLoadingFeatures(true);
+      try {
+        const remoteFeatures = await applicationService.getFeaturesByApplication(appId);
+        const normalized: Feature[] = remoteFeatures.map((feature: any) => {
+          const fallbackName = feature?.name || feature?.key || "Fonctionnalité";
+          return {
+            id: feature?.id || feature?.featureId || `feature-${Date.now()}-${Math.random()}`,
+            name: fallbackName,
+            description: feature?.description || "",
+            key:
+              feature?.key ||
+              fallbackName
+                .toLowerCase()
+                .replace(/\s+/g, "_")
+                .replace(/[^\w-]/g, ""),
+            type: feature?.type || feature?.featureType || undefined,
+            category: feature?.category || feature?.featureCategory || undefined,
+            applicationId: feature?.applicationId,
+          };
+        });
+        setLocalApp((prev) => {
+          if (!prev || prev.id !== appId) {
+            return { ...application, features: normalized };
+          }
+          return { ...prev, features: normalized };
+        });
+        return normalized;
+      } catch (error: any) {
+        console.error(error);
+        toast.error(error?.message || "Impossible de charger les fonctionnalités");
+        return null;
+      } finally {
+        setIsLoadingFeatures(false);
+      }
+    },
+    [application],
+  );
+
+  const loadPlans = useCallback(
+    async (appId: string) => {
+      setIsLoadingPlans(true);
+      try {
+        const remotePlans = await applicationService.getPlansByApplication(appId);
+        const normalized: Plan[] = await Promise.all(
+          remotePlans.map(async (plan: any) => {
+          const baseMonthly = Number(plan?.monthlyPrice ?? plan?.price ?? 0);
+          const annualPrice = Number(plan?.yearlyPrice ?? plan?.annualPrice ?? 0);
+          const currencyCode =
+            (typeof plan?.currency === "string" && plan.currency) ||
+            plan?.currency?.code ||
+            undefined;
+            let planFeaturesRaw: any[] = [];
+            if (plan?.id) {
+              try {
+                planFeaturesRaw = await applicationService.getPlanFeatures(plan.id);
+              } catch (planFeatureError) {
+                console.warn("[ApplicationDetails] Unable to load plan features", planFeatureError);
+              }
+            }
+            const fallbackFeatures = Array.isArray(plan?.features) ? plan.features : [];
+            const sourceFeatures = planFeaturesRaw.length > 0 ? planFeaturesRaw : fallbackFeatures;
+            const planFeatures: PlanFeature[] = sourceFeatures
+              .map((pf: any) => ({
+                featureId: pf?.featureId || pf?.feature?.id || pf?.id || "",
+                limit: pf?.quotaLimit ?? pf?.limit ?? pf?.quota ?? null,
+              }))
+              .filter((pf: PlanFeature) => Boolean(pf.featureId));
+
+            return {
+              id: plan?.id || plan?.planId || `plan-${Date.now()}-${Math.random()}`,
+              name: plan?.name || "Plan",
+              description: plan?.description || "",
+              price: baseMonthly,
+              currency: currencyCode,
+              interval:
+                plan?.interval === "year" || plan?.billingCycle === "year" ? "year" : "month",
+              features: planFeatures,
+              monthlyPrice: baseMonthly,
+              yearlyPrice: annualPrice,
+              maxUsers: plan?.maxUsers ?? plan?.userLimit ?? undefined,
+              maxStorage: plan?.maxStorage ?? plan?.storageLimit ?? undefined,
+              priority: plan?.priority ?? undefined,
+            };
+          }),
+        );
+        setLocalApp((prev) => {
+          if (!prev || prev.id !== appId) {
+            return { ...application, plans: normalized };
+          }
+          return { ...prev, plans: normalized };
+        });
+        return normalized;
+      } catch (error: any) {
+        console.error(error);
+        toast.error(error?.message || "Impossible de charger les plans");
+        return null;
+      } finally {
+        setIsLoadingPlans(false);
+      }
+    },
+    [application],
+  );
+
+  const loadPromotions = useCallback(async () => {
+    setIsLoadingPromotions(true);
+    try {
+      const list = await promotionService.listPromotions();
+      const grouped = list.reduce<Record<string, Promotion[]>>((acc, promo) => {
+        if (!promo?.planId) return acc;
+        if (!acc[promo.planId]) {
+          acc[promo.planId] = [];
+        }
+        acc[promo.planId].push(promo);
+        return acc;
+      }, {});
+      setPromotionsByPlan(grouped);
+    } catch (error: any) {
+      console.error("[ApplicationDetails] Error loading promotions", error);
+      toast.error(error?.message || "Impossible de récupérer les promotions");
+    } finally {
+      setIsLoadingPromotions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!application.id) return;
+    loadFeatures(application.id);
+    loadPlans(application.id);
+    loadPromotions();
+  }, [application.id, loadFeatures, loadPlans, loadPromotions]);
 
   // Feature handlers
   const resetFeatureForm = () => {
-    setFeatureForm({ name: "", description: "", key: "" });
+    setFeatureForm({ name: "", description: "", key: "", type: "payment", category: "finance" });
   };
 
-  const handleAddFeature = () => {
-    const newFeature: Feature = {
-      id: (localApp.features.length + 1).toString(),
-      name: featureForm.name,
-      description: featureForm.description,
-      key: featureForm.key,
-    };
-    const updatedApp = {
-      ...localApp,
-      features: [...localApp.features, newFeature],
-    };
-    setLocalApp(updatedApp);
-    onUpdate(updatedApp);
-    setIsAddFeatureDialogOpen(false);
-    resetFeatureForm();
-    toast.success("Fonctionnalité ajoutée avec succès!");
+  const handleAddFeature = async () => {
+    if (!featureForm.name || !featureForm.type || !featureForm.category) {
+      toast.error("Veuillez remplir tous les champs requis");
+      return;
+    }
+
+    try {
+      setIsSavingFeature(true);
+      const payload: FeaturePayload = {
+        name: featureForm.name,
+        description: featureForm.description,
+        type: featureForm.type,
+        category: featureForm.category,
+        applicationId: localApp.id,
+      };
+      await applicationService.addFeature(payload);
+      const updatedFeatures = await loadFeatures(localApp.id);
+      if (updatedFeatures) {
+        onUpdate({ ...localApp, features: updatedFeatures });
+      }
+      setIsAddFeatureDialogOpen(false);
+      resetFeatureForm();
+      toast.success("Fonctionnalité créée via l'API !");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error?.message || "Impossible de créer la fonctionnalité");
+    } finally {
+      setIsSavingFeature(false);
+    }
   };
 
   const handleEditFeature = () => {
@@ -137,7 +393,14 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
       ...localApp,
       features: localApp.features.map((f) =>
         f.id === selectedFeature.id
-          ? { ...f, name: featureForm.name, description: featureForm.description, key: featureForm.key }
+          ? {
+              ...f,
+              name: featureForm.name,
+              description: featureForm.description,
+              key: featureForm.key,
+              type: featureForm.type,
+              category: featureForm.category,
+            }
           : f
       ),
     };
@@ -172,6 +435,8 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
       name: feature.name,
       description: feature.description,
       key: feature.key,
+      type: feature.type || "payment",
+      category: feature.category || "finance",
     });
     setIsEditFeatureDialogOpen(true);
   };
@@ -186,32 +451,85 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
     setPlanForm({
       name: "",
       description: "",
-      price: 0,
-      currency: "EUR",
+      monthlyPrice: 0,
+      yearlyPrice: 0,
+      maxUsers: 0,
+      priority: 1,
       interval: "month",
       features: [],
     });
   };
 
-  const handleAddPlan = () => {
-    const newPlan: Plan = {
-      id: (localApp.plans.length + 1).toString(),
-      name: planForm.name,
-      description: planForm.description,
-      price: planForm.price,
-      currency: planForm.currency,
-      interval: planForm.interval,
-      features: planForm.features,
-    };
-    const updatedApp = {
-      ...localApp,
-      plans: [...localApp.plans, newPlan],
-    };
-    setLocalApp(updatedApp);
-    onUpdate(updatedApp);
-    setIsAddPlanDialogOpen(false);
-    resetPlanForm();
-    toast.success("Plan ajouté avec succès!");
+  const handleAddPlan = async () => {
+    const trimmedName = planForm.name.trim();
+    if (!trimmedName) {
+      toast.error("Le nom du plan est obligatoire");
+      return;
+    }
+    try {
+      setIsSavingPlan(true);
+      const payload: PlanPayload = {
+        name: trimmedName,
+        description: planForm.description,
+        monthlyPrice: planForm.monthlyPrice,
+        yearlyPrice: planForm.yearlyPrice,
+        maxUsers: planForm.maxUsers,
+        priority: planForm.priority,
+        applicationId: localApp.id,
+      };
+      const created: any = await applicationService.addPlan(payload);
+      const createdPlanId =
+        created?.id ||
+        created?.data?.id ||
+        created?.planId ||
+        (Array.isArray(created?.data?.content) && created.data.content[0]?.id) ||
+        null;
+
+      if (createdPlanId && planForm.features.length > 0) {
+        try {
+          await Promise.all(
+            planForm.features.map((feature) =>
+              applicationService.assignFeatureToPlan({
+                planId: createdPlanId,
+                featureId: feature.featureId,
+                quotaLimit: feature.limit ?? null,
+                included: true,
+              }),
+            ),
+          );
+        } catch (assignError: any) {
+          console.error(assignError);
+          toast.warning(
+            assignError?.message ||
+              "Plan créé, mais l'association automatique des fonctionnalités a échoué.",
+          );
+        }
+      }
+
+      const updatedPlans = await loadPlans(localApp.id);
+      if (updatedPlans) {
+        onUpdate({ ...localApp, plans: updatedPlans });
+      }
+      setIsAddPlanDialogOpen(false);
+      resetPlanForm();
+      toast.success("Plan créé via l'API !");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error?.message || "Impossible de créer le plan");
+    } finally {
+      setIsSavingPlan(false);
+    }
+  };
+
+  const resetPromotionForm = () => {
+    setPromotionForm({
+      code: "",
+      discountPercentage: "",
+      startDate: "",
+      endDate: "",
+      maxUsage: "",
+      minPurchaseAmount: "",
+    });
   };
 
   const handleEditPlan = () => {
@@ -224,10 +542,13 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
               ...p,
               name: planForm.name,
               description: planForm.description,
-              price: planForm.price,
-              currency: planForm.currency,
+              price: planForm.monthlyPrice,
               interval: planForm.interval,
               features: planForm.features,
+              monthlyPrice: planForm.monthlyPrice,
+              yearlyPrice: planForm.yearlyPrice,
+              maxUsers: planForm.maxUsers,
+              priority: planForm.priority,
             }
           : p
       ),
@@ -258,8 +579,10 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
     setPlanForm({
       name: plan.name,
       description: plan.description,
-      price: plan.price,
-      currency: plan.currency,
+      monthlyPrice: plan.monthlyPrice ?? plan.price,
+      yearlyPrice: plan.yearlyPrice ?? 0,
+      maxUsers: plan.maxUsers ?? 0,
+      priority: plan.priority ?? 1,
       interval: plan.interval,
       features: [...plan.features],
     });
@@ -269,6 +592,93 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
   const openDeletePlanDialog = (plan: Plan) => {
     setSelectedPlan(plan);
     setIsDeletePlanDialogOpen(true);
+  };
+
+  const openPromotionDialog = (plan: Plan) => {
+    const normalizedName = plan.name.replace(/\s+/g, "").toUpperCase().slice(0, 16);
+    const defaultCode = `${normalizedName || "PROMO"}${new Date().getFullYear()}`;
+    setPromotionPlan(plan);
+    setPromotionForm({
+      code: defaultCode,
+      discountPercentage: "",
+      startDate: "",
+      endDate: "",
+      maxUsage: "",
+      minPurchaseAmount: "",
+    });
+    setIsPromotionDialogOpen(true);
+  };
+
+  const handlePromotionFieldChange = (field: keyof typeof promotionForm, value: string) => {
+    setPromotionForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleCreatePromotion = async () => {
+    if (!promotionPlan) {
+      toast.error("Veuillez sélectionner un plan");
+      return;
+    }
+    const connectedUserId = resolveConnectedUserId();
+    if (!connectedUserId) {
+      toast.error("Impossible d'identifier l'utilisateur connecté. Veuillez vous reconnecter.");
+      return;
+    }
+    const trimmedCode = promotionForm.code.trim();
+    if (!trimmedCode) {
+      toast.error("Le code promotionnel est obligatoire");
+      return;
+    }
+    const discount = parseFloat(promotionForm.discountPercentage);
+    if (!Number.isFinite(discount) || discount <= 0) {
+      toast.error("Le pourcentage de réduction doit être supérieur à 0");
+      return;
+    }
+    if (!promotionForm.startDate || !promotionForm.endDate) {
+      toast.error("Veuillez définir les dates de début et de fin");
+      return;
+    }
+    if (new Date(promotionForm.startDate) > new Date(promotionForm.endDate)) {
+      toast.error("La date de fin doit être postérieure à la date de début");
+      return;
+    }
+
+    const parsedMaxUsage =
+      promotionForm.maxUsage.trim() === ""
+        ? 0
+        : parseInt(promotionForm.maxUsage, 10);
+    const parsedMinAmount =
+      promotionForm.minPurchaseAmount.trim() === ""
+        ? 0
+        : parseFloat(promotionForm.minPurchaseAmount);
+
+    const payload: PromotionPayload = {
+      code: trimmedCode,
+      discountPercentage: discount,
+      startDate: promotionForm.startDate,
+      endDate: promotionForm.endDate,
+      maxUsage: Number.isFinite(parsedMaxUsage) ? parsedMaxUsage : 0,
+      minPurchaseAmount: Number.isFinite(parsedMinAmount) ? parsedMinAmount : 0,
+      planId: promotionPlan.id,
+      createdBy: connectedUserId,
+    };
+
+    try {
+      setIsCreatingPromotion(true);
+      const { response } = await promotionService.createPromotion(payload);
+      toast.success(response?.message || "Promotion créée avec succès");
+      await loadPromotions();
+      setIsPromotionDialogOpen(false);
+      setPromotionPlan(null);
+      resetPromotionForm();
+    } catch (error: any) {
+      console.error("[ApplicationDetails] Promotion creation failed", error);
+      toast.error(error?.message || "Impossible de créer la promotion");
+    } finally {
+      setIsCreatingPromotion(false);
+    }
   };
 
   const toggleFeatureInPlan = (featureId: string) => {
@@ -297,6 +707,57 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
 
   const getFeatureName = (featureId: string) => {
     return localApp.features.find((f) => f.id === featureId)?.name || "Inconnue";
+  };
+
+  const getDefaultAssignableFeatureId = (plan?: Plan) => {
+    const available = localApp.features.find(
+      (feature) => !plan?.features.some((pf) => pf.featureId === feature.id),
+    );
+    return available?.id || localApp.features[0]?.id || "";
+  };
+
+  const openAssignPlanFeatureDialog = (plan: Plan) => {
+    if (localApp.features.length === 0) {
+      toast.error("Aucune fonctionnalité disponible. Créez-en d'abord.");
+      return;
+    }
+    setPlanToAssignFeature(plan);
+    setPlanFeatureAssignment({
+      featureId: getDefaultAssignableFeatureId(plan),
+      quotaLimit: "",
+      included: true,
+    });
+    setIsAssignFeatureToPlanOpen(true);
+  };
+
+  const handleAssignFeatureToPlan = async () => {
+    if (!planToAssignFeature || !planFeatureAssignment.featureId) {
+      toast.error("Sélectionnez une fonctionnalité");
+      return;
+    }
+    try {
+      setIsAssigningPlanFeature(true);
+      const parsedQuota =
+        planFeatureAssignment.quotaLimit.trim() === ""
+          ? null
+          : Number(planFeatureAssignment.quotaLimit);
+      const quotaValue = parsedQuota !== null && !Number.isFinite(parsedQuota) ? null : parsedQuota;
+      await applicationService.assignFeatureToPlan({
+        planId: planToAssignFeature.id,
+        featureId: planFeatureAssignment.featureId,
+        quotaLimit: quotaValue,
+        included: planFeatureAssignment.included,
+      });
+      toast.success("Fonctionnalité assignée au plan !");
+      await loadPlans(localApp.id);
+      setIsAssignFeatureToPlanOpen(false);
+      setPlanToAssignFeature(null);
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error?.message || "Impossible d'assigner la fonctionnalité");
+    } finally {
+      setIsAssigningPlanFeature(false);
+    }
   };
 
   return (
@@ -388,7 +849,9 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
               </div>
             </CardHeader>
             <CardContent>
-              {localApp.features.length === 0 ? (
+              {isLoadingFeatures ? (
+                <div className="text-center py-12 text-gray-500">Chargement des fonctionnalités...</div>
+              ) : localApp.features.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   Aucune fonctionnalité ajoutée
                 </div>
@@ -456,13 +919,19 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
               </div>
             </CardHeader>
             <CardContent>
-              {localApp.plans.length === 0 ? (
+              {isLoadingPlans ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Chargement des plans...
+                </div>
+              ) : localApp.plans.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   Aucun plan ajouté
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {localApp.plans.map((plan) => (
+                  {localApp.plans.map((plan) => {
+                    const planPromotions = promotionsByPlan[plan.id] || [];
+                    return (
                     <Card key={plan.id}>
                       <CardHeader>
                         <div className="flex items-center justify-between">
@@ -471,6 +940,24 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                             <CardDescription>{plan.description}</CardDescription>
                           </div>
                           <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              title="Créer une promotion"
+                              onClick={() => openPromotionDialog(plan)}
+                              disabled={!plan.id}
+                            >
+                              <Tag className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              title="Assigner une fonctionnalité"
+                              onClick={() => openAssignPlanFeatureDialog(plan)}
+                              disabled={localApp.features.length === 0}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="outline"
                               size="icon"
@@ -490,10 +977,26 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
-                          <div>
-                            <div className="text-muted-foreground">Prix</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              {plan.price} {plan.currency} / {plan.interval === "month" ? "mois" : "an"}
+                              <div className="text-muted-foreground text-sm">Prix mensuel</div>
+                              <div className="text-lg font-semibold">
+                                {plan.monthlyPrice ?? plan.price} {plan.currency || "XAF"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground text-sm">Prix annuel</div>
+                              <div className="text-lg font-semibold">
+                                {plan.yearlyPrice ?? 0} {plan.currency || "XAF"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground text-sm">Utilisateurs max</div>
+                              <div>{plan.maxUsers ?? "—"}</div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground text-sm">Stockage max (Mo)</div>
+                              <div>{plan.maxStorage ?? "—"}</div>
                             </div>
                           </div>
                           <div>
@@ -523,10 +1026,73 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                               </ul>
                             )}
                           </div>
+                          <div>
+                            <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                              <Tag className="h-4 w-4" />
+                              <span>Promotions liées</span>
+                              {isLoadingPromotions && (
+                                <span className="text-xs text-muted-foreground">Chargement...</span>
+                              )}
+                            </div>
+                            {planPromotions.length === 0 ? (
+                              <div className="text-sm text-muted-foreground">
+                                Aucune promotion pour ce plan
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {planPromotions.map((promo) => (
+                                  <div
+                                    key={promo.id}
+                                    className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-semibold text-gray-900">{promo.code}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {formatPromotionDate(promo.startDate)} →{" "}
+                                          {formatPromotionDate(promo.endDate)}
+                                        </div>
+                                      </div>
+                                      <Badge variant="outline" className="text-xs">
+                                        {formatPromotionStatus(promo)}
+                                      </Badge>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                      <div>
+                                        <div className="text-muted-foreground">Réduction</div>
+                                        <div className="font-medium text-gray-900">
+                                          {formatPercentage(promo.discountPercentage)}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-muted-foreground">Montant min.</div>
+                                        <div className="font-medium text-gray-900">
+                                          {formatMoney(promo.minPurchaseAmount, plan.currency || "XAF")}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-muted-foreground">Quota</div>
+                                        <div className="font-medium text-gray-900">
+                                          {promo.currentUsage ?? 0} / {promo.maxUsage ?? 0}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-muted-foreground">Auteur</div>
+                                        <div className="font-medium text-gray-900 text-xs break-all">
+                                          {promo.createdBy || "—"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -562,6 +1128,26 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                 placeholder="Ex: Permet d'exporter les documents en PDF"
               />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="feature-type">Type</Label>
+                <Input
+                  id="feature-type"
+                  value={featureForm.type}
+                  onChange={(e) => setFeatureForm({ ...featureForm, type: e.target.value })}
+                  placeholder="payment"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="feature-category">Catégorie</Label>
+                <Input
+                  id="feature-category"
+                  value={featureForm.category}
+                  onChange={(e) => setFeatureForm({ ...featureForm, category: e.target.value })}
+                  placeholder="finance"
+                />
+              </div>
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="feature-key">Clé technique</Label>
               <Input
@@ -579,9 +1165,9 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
             <Button
               onClick={handleAddFeature}
               className="bg-[#8b68a6] hover:bg-[#6b4685]"
-              disabled={!featureForm.name || !featureForm.key}
+              disabled={isSavingFeature || !featureForm.name || !featureForm.type || !featureForm.category}
             >
-              Ajouter
+              {isSavingFeature ? "Envoi..." : "Ajouter"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -612,6 +1198,24 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                 value={featureForm.description}
                 onChange={(e) => setFeatureForm({ ...featureForm, description: e.target.value })}
               />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-feature-type">Type</Label>
+                <Input
+                  id="edit-feature-type"
+                  value={featureForm.type}
+                  onChange={(e) => setFeatureForm({ ...featureForm, type: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-feature-category">Catégorie</Label>
+                <Input
+                  id="edit-feature-category"
+                  value={featureForm.category}
+                  onChange={(e) => setFeatureForm({ ...featureForm, category: e.target.value })}
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-feature-key">Clé technique</Label>
@@ -687,23 +1291,53 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                 placeholder="Ex: Toutes les fonctionnalités avancées"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="plan-price">Prix</Label>
+                <Label htmlFor="plan-monthly-price">Prix mensuel (€)</Label>
                 <Input
-                  id="plan-price"
+                  id="plan-monthly-price"
                   type="number"
-                  value={planForm.price}
-                  onChange={(e) => setPlanForm({ ...planForm, price: parseFloat(e.target.value) || 0 })}
+                  step="0.01"
+                  value={planForm.monthlyPrice}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, monthlyPrice: parseFloat(e.target.value) || 0 })
+                  }
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="plan-currency">Devise</Label>
+                <Label htmlFor="plan-yearly-price">Prix annuel (€)</Label>
                 <Input
-                  id="plan-currency"
-                  value={planForm.currency}
-                  onChange={(e) => setPlanForm({ ...planForm, currency: e.target.value })}
-                  placeholder="EUR"
+                  id="plan-yearly-price"
+                  type="number"
+                  step="0.01"
+                  value={planForm.yearlyPrice}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, yearlyPrice: parseFloat(e.target.value) || 0 })
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="plan-max-users">Utilisateurs max</Label>
+                <Input
+                  id="plan-max-users"
+                  type="number"
+                  value={planForm.maxUsers}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, maxUsers: parseInt(e.target.value) || 0 })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="plan-priority">Priorité</Label>
+                <Input
+                  id="plan-priority"
+                  type="number"
+                  value={planForm.priority}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, priority: parseInt(e.target.value) || 1 })
+                  }
                 />
               </div>
             </div>
@@ -767,7 +1401,7 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                             <Input
                               type="number"
                               placeholder="Illimité"
-                              value={planFeature.limit ?? ""}
+                              value={planFeature?.limit ?? ""}
                               onChange={(e) => {
                                 const value = e.target.value;
                                 updateFeatureLimit(
@@ -796,9 +1430,190 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
             <Button
               onClick={handleAddPlan}
               className="bg-[#8b68a6] hover:bg-[#6b4685]"
-              disabled={!planForm.name}
+              disabled={isSavingPlan || !planForm.name}
             >
-              Ajouter
+              {isSavingPlan ? "Envoi..." : "Ajouter"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Créer une promotion */}
+      <Dialog
+        open={isPromotionDialogOpen}
+        onOpenChange={(open: boolean) => {
+          setIsPromotionDialogOpen(open);
+          if (!open) {
+            setPromotionPlan(null);
+            resetPromotionForm();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Créer une promotion</DialogTitle>
+            <DialogDescription>
+              Associez un code promotionnel au plan "{promotionPlan?.name}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-1 text-sm text-muted-foreground">
+              <span>ID du plan: <strong>{promotionPlan?.id || "—"}</strong></span>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="promotion-code">Code</Label>
+              <Input
+                id="promotion-code"
+                value={promotionForm.code}
+                onChange={(e) => handlePromotionFieldChange("code", e.target.value)}
+                placeholder="SUMMER2024"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="promotion-discount">Réduction (%)</Label>
+                <Input
+                  id="promotion-discount"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={promotionForm.discountPercentage}
+                  onChange={(e) => handlePromotionFieldChange("discountPercentage", e.target.value)}
+                  placeholder="25"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="promotion-max-usage">Utilisations max</Label>
+                <Input
+                  id="promotion-max-usage"
+                  type="number"
+                  min={0}
+                  value={promotionForm.maxUsage}
+                  onChange={(e) => handlePromotionFieldChange("maxUsage", e.target.value)}
+                  placeholder="100"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="promotion-start">Date de début</Label>
+                <Input
+                  id="promotion-start"
+                  type="date"
+                  value={promotionForm.startDate}
+                  onChange={(e) => handlePromotionFieldChange("startDate", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="promotion-end">Date de fin</Label>
+                <Input
+                  id="promotion-end"
+                  type="date"
+                  value={promotionForm.endDate}
+                  onChange={(e) => handlePromotionFieldChange("endDate", e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="promotion-min-amount">Montant minimum d'achat</Label>
+              <Input
+                id="promotion-min-amount"
+                type="number"
+                step="0.01"
+                min={0}
+                value={promotionForm.minPurchaseAmount}
+                onChange={(e) =>
+                  handlePromotionFieldChange("minPurchaseAmount", e.target.value)
+                }
+                placeholder="50"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPromotionDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleCreatePromotion} disabled={isCreatingPromotion}>
+              {isCreatingPromotion ? "Création..." : "Créer la promotion"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog assigner une fonctionnalité à un plan */}
+      <Dialog
+        open={isAssignFeatureToPlanOpen}
+        onOpenChange={(open: boolean) => {
+          setIsAssignFeatureToPlanOpen(open);
+          if (!open) {
+            setPlanToAssignFeature(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Assigner une fonctionnalité</DialogTitle>
+            <DialogDescription>
+              Ajoutez une fonctionnalité existante au plan "{planToAssignFeature?.name}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Fonctionnalité</Label>
+              <Select
+                value={planFeatureAssignment.featureId}
+                onValueChange={(value: string) =>
+                  setPlanFeatureAssignment((prev) => ({ ...prev, featureId: value }))
+                }
+                disabled={localApp.features.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionnez une fonctionnalité" />
+                </SelectTrigger>
+                <SelectContent>
+                  {localApp.features.map((feature) => (
+                    <SelectItem key={feature.id} value={feature.id}>
+                      {feature.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="plan-feature-quota">Quota (optionnel)</Label>
+              <Input
+                id="plan-feature-quota"
+                type="number"
+                min={0}
+                placeholder="Illimité"
+                value={planFeatureAssignment.quotaLimit}
+                onChange={(e) =>
+                  setPlanFeatureAssignment((prev) => ({
+                    ...prev,
+                    quotaLimit: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="plan-feature-included"
+                checked={planFeatureAssignment.included}
+                onCheckedChange={(checked: boolean) =>
+                  setPlanFeatureAssignment((prev) => ({ ...prev, included: checked }))
+                }
+              />
+              <Label htmlFor="plan-feature-included" className="text-sm">
+                Inclure dans le plan (actif par défaut)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssignFeatureToPlanOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleAssignFeatureToPlan} disabled={isAssigningPlanFeature}>
+              {isAssigningPlanFeature ? "Association..." : "Assigner"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -830,22 +1645,53 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                 onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-plan-price">Prix</Label>
+                <Label htmlFor="edit-plan-monthly-price">Prix mensuel (€)</Label>
                 <Input
-                  id="edit-plan-price"
+                  id="edit-plan-monthly-price"
                   type="number"
-                  value={planForm.price}
-                  onChange={(e) => setPlanForm({ ...planForm, price: parseFloat(e.target.value) || 0 })}
+                  step="0.01"
+                  value={planForm.monthlyPrice}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, monthlyPrice: parseFloat(e.target.value) || 0 })
+                  }
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-plan-currency">Devise</Label>
+                <Label htmlFor="edit-plan-yearly-price">Prix annuel (€)</Label>
                 <Input
-                  id="edit-plan-currency"
-                  value={planForm.currency}
-                  onChange={(e) => setPlanForm({ ...planForm, currency: e.target.value })}
+                  id="edit-plan-yearly-price"
+                  type="number"
+                  step="0.01"
+                  value={planForm.yearlyPrice}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, yearlyPrice: parseFloat(e.target.value) || 0 })
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-plan-max-users">Utilisateurs max</Label>
+                <Input
+                  id="edit-plan-max-users"
+                  type="number"
+                  value={planForm.maxUsers}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, maxUsers: parseInt(e.target.value) || 0 })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-plan-priority">Priorité</Label>
+                <Input
+                  id="edit-plan-priority"
+                  type="number"
+                  value={planForm.priority}
+                  onChange={(e) =>
+                    setPlanForm({ ...planForm, priority: parseInt(e.target.value) || 1 })
+                  }
                 />
               </div>
             </div>
@@ -908,7 +1754,7 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                             <Input
                               type="number"
                               placeholder="Illimité"
-                              value={planFeature.limit ?? ""}
+                              value={planFeature?.limit ?? ""}
                               onChange={(e) => {
                                 const value = e.target.value;
                                 updateFeatureLimit(

@@ -14,8 +14,14 @@ import { Separator } from "./ui/separator";
 import { Switch } from "./ui/switch";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { API_ENDPOINTS } from "../utils/apiEndpoints";
 import { API_BASE_URL } from "../utils/apiClient";
+import {
+  endpointCatalog,
+  pageEndpointMap,
+  PAGE_LABELS,
+  type DashboardPageKey,
+  type EndpointCatalogEntry,
+} from "../utils/apiEndpoints";
 
 interface ProfileSettings {
   firstName: string;
@@ -84,12 +90,18 @@ export function Settings() {
   const filteredEndpoints = useMemo(() => {
     if (!endpointFilter) return endpointCatalog;
     const term = endpointFilter.toLowerCase();
-    return endpointCatalog.filter(
-      (endpoint) =>
+    return endpointCatalog.filter((endpoint) => {
+      const pageLabels = endpoint.pages.map((page) =>
+        PAGE_LABELS[page].toLowerCase(),
+      );
+      return (
         endpoint.label.toLowerCase().includes(term) ||
         endpoint.method.toLowerCase().includes(term) ||
-        endpoint.path.toLowerCase().includes(term),
-    );
+        endpoint.path.toLowerCase().includes(term) ||
+        endpoint.folder.toLowerCase().includes(term) ||
+        pageLabels.some((label) => label.includes(term))
+      );
+    });
   }, [endpointFilter]);
 
   return (
@@ -381,10 +393,57 @@ export function Settings() {
           <Card className="border-0 shadow-md overflow-hidden relative">
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
             <CardHeader>
-              <CardTitle className="text-gray-900">Endpoints importés depuis Postman</CardTitle>
+              <CardTitle className="text-gray-900">Couverture API par page</CardTitle>
               <CardDescription className="text-gray-600">
-                Chaque route provient de <code>FAROTY.postman_collection.json</code> et est prête à être
-                consommée par le client API.
+                Chaque vue du dashboard est reli&eacute;e aux endpoints publi&eacute;s dans <code>apiEndpoints.ts</code>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                {pageCoverageSummaries.map(({ page, label, total, sample }) => (
+                  <div
+                    key={page}
+                    className="rounded-2xl border border-primary/15 p-4 shadow-sm bg-white/50"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {total} endpoint{total > 1 ? "s" : ""} connect&eacute;{total > 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="rounded-full px-3 py-1">
+                        {total}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sample.map((endpoint) => (
+                        <Badge
+                          key={`${page}-${endpoint.id}`}
+                          variant="outline"
+                          className="rounded-full font-mono text-[11px]"
+                        >
+                          {endpoint.method} {endpoint.path.replace(/^https?:\/\/[^/]+/i, "")}
+                        </Badge>
+                      ))}
+                      {total > sample.length && (
+                        <span className="text-xs text-muted-foreground">
+                          +{total - sample.length} supplémentaire{total - sample.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-md overflow-hidden relative">
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
+            <CardHeader>
+              <CardTitle className="text-gray-900">Catalogue des endpoints</CardTitle>
+              <CardDescription className="text-gray-600">
+                Toutes les routes disponibles transitent par <code>apiEndpoints.ts</code>, ce qui garantit une seule source fiable pour le client API.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -407,6 +466,9 @@ export function Settings() {
                       <th className="p-3 text-left text-xs uppercase tracking-widest text-muted-foreground">
                         Chemin
                       </th>
+                      <th className="p-3 text-left text-xs uppercase tracking-widest text-muted-foreground">
+                        Pages
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -419,13 +481,18 @@ export function Settings() {
                         </td>
                         <td className="p-3 font-semibold text-gray-900">{endpoint.label}</td>
                         <td className="p-3 font-mono text-xs text-muted-foreground">{endpoint.path}</td>
+                        <td className="p-3 text-xs text-muted-foreground">
+                          {endpoint.pages.length > 0
+                            ? endpoint.pages.map((page) => PAGE_LABELS[page]).join(", ")
+                            : "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="text-xs text-muted-foreground">
-                {filteredEndpoints.length} endpoint(s) disponibles depuis la collection Postman initiale.
+                {filteredEndpoints.length} endpoint(s) expos&eacute;s via <code>apiEndpoints.ts</code>.
               </p>
             </CardContent>
           </Card>
@@ -434,4 +501,13 @@ export function Settings() {
     </div>
   );
 }
+
+const pageCoverageSummaries = (
+  Object.entries(pageEndpointMap) as [DashboardPageKey, EndpointCatalogEntry[]][]
+).map(([page, endpoints]) => ({
+  page,
+  label: PAGE_LABELS[page],
+  total: endpoints.length,
+  sample: endpoints.slice(0, 3),
+}));
 

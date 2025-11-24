@@ -10,12 +10,12 @@ import {
 } from "./ui/input-otp";
 import { ArrowLeft, Shield, Globe, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import logo from "figma:asset/64732130af5e1351819c7a94a0f8563f43705c92.png";
+import logo from "@/assets/64732130af5e1351819c7a94a0f8563f43705c92.png";
 import { authService } from "../services/authService";
 import { getTempToken, clearTempToken, getTempTokenRemainingSeconds } from "../services/tokenStorage";
 
 interface LoginPageProps {
-  onLogin: () => void;
+  onLogin: (user?: any) => void;
 }
 
 // Générer un deviceId unique pour cette session
@@ -52,7 +52,7 @@ const getDeviceInfoForVerifyOtp = () => {
   const deviceInfo = {
     deviceId: deviceId,
     deviceType: "MOBILE" as const,
-    deviceName: "iPhone de Mac", // deviceName (pas deviceModel) avec même valeur
+    deviceModel: "iPhone de Mac", // deviceName (pas deviceModel) avec même valeur
     osName: "tester", // Même valeur que Postman
   };
   
@@ -148,7 +148,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     try {
       const deviceInfo = getDeviceInfoForVerifyOtp();
       const verifyRequest = {
-        contact: email.trim(),
+        // contact: email.trim(),
         otpCode: otpCode,
         tempToken: tempToken,
         deviceInfo: deviceInfo,
@@ -163,7 +163,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       
       toast.success("Connexion réussie !");
       setTimeout(() => {
-        onLogin();
+        onLogin(response.user);
       }, 500);
     } catch (error) {
       console.error("OTP verification error:", error);

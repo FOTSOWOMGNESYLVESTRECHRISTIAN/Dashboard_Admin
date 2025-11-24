@@ -46,15 +46,18 @@ import { UserDetails } from "./UserDetails";
 import { Payment, PaymentMethod, Wallet } from "./Payment";
 import { PaymentMethodDetails } from "./PaymentMethodDetails";
 import { WalletDetails } from "./WalletDetails";
-import logo from "figma:asset/64732130af5e1351819c7a94a0f8563f43705c92.png";
+import logo from "@/assets/64732130af5e1351819c7a94a0f8563f43705c92.png";
+import type { Application as ApiApplication } from "../services/applicationService";
+import { PAGE_LABELS } from "../utils/apiEndpoints";
 
 interface DashboardProps {
   onLogout: () => void;
+  user?: Record<string, any> | null;
 }
 
 type Page = "stats" | "applications" | "subscriptions" | "users" | "payment" | "settings";
 
-export function Dashboard({ onLogout }: DashboardProps) {
+export function Dashboard({ onLogout, user }: DashboardProps) {
   const [currentPage, setCurrentPage] = useState<Page>("stats");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
@@ -63,7 +66,25 @@ export function Dashboard({ onLogout }: DashboardProps) {
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
 
-  const menuItems = [
+const adaptApplicationForDetails = (app: ApiApplication): Application => {
+  const allowedStatuses: Application["status"][] = ["active", "inactive", "maintenance"];
+  const normalizedStatus = (app.status ?? "").toLowerCase() as Application["status"];
+
+  return {
+    id: app.id,
+    name: app.name,
+    category: app.type || "Application",
+    version: app.version || "1.0.0",
+    status: allowedStatuses.includes(normalizedStatus) ? normalizedStatus : "active",
+    subscriptions: 0,
+    lastUpdate: app.updatedAt || app.createdAt || new Date().toISOString(),
+    description: app.description || "",
+    plans: [],
+    features: [],
+  };
+};
+
+const menuItems = [
     {
       id: "stats" as Page,
       label: "Statistiques",
@@ -91,8 +112,8 @@ export function Dashboard({ onLogout }: DashboardProps) {
     },
   ];
 
-  const handleViewApplicationDetails = (app: Application) => {
-    setSelectedApplication(app);
+  const handleViewApplicationDetails = (app: ApiApplication) => {
+    setSelectedApplication(adaptApplicationForDetails(app));
   };
 
   const handleBackFromApplicationDetails = () => {
@@ -217,13 +238,27 @@ export function Dashboard({ onLogout }: DashboardProps) {
     }
   };
 
+  const displayName =
+    user?.name ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    user?.username ||
+    "Admin";
+  const displayEmail = user?.email || user?.contact || "admin@example.com";
+  const avatarFallback =
+    (displayName || "")
+      .split(" ")
+      .map((part: string) => part.charAt(0))
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "AD";
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-3 px-2 py-2">
-              <img src={logo} alt="Logo" className="w-10 h-10" />
+              <img src={logo} alt="Logo" className="w-12 h-12" />
               <div className="flex flex-col">
                 <span>Admin Dashboard</span>
                 <span className="text-xs text-muted-foreground">
@@ -278,13 +313,13 @@ export function Dashboard({ onLogout }: DashboardProps) {
                   <DropdownMenuTrigger asChild>
                     <SidebarMenuButton className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
                       <Avatar className="h-6 w-6">
-                        <AvatarImage src="" />
-                        <AvatarFallback>AD</AvatarFallback>
+                        <AvatarImage src={user?.avatarUrl || ""} />
+                        <AvatarFallback>{avatarFallback}</AvatarFallback>
                       </Avatar>
                       <div className="flex flex-1 flex-col items-start text-left">
-                        <span className="text-sm">Admin</span>
-                        <span className="text-xs text-muted-foreground">
-                          admin@example.com
+                        <span className="text-sm truncate max-w-[120px]">{displayName}</span>
+                        <span className="text-xs text-muted-foreground truncate max-w-[140px]">
+                          {displayEmail}
                         </span>
                       </div>
                       <ChevronDown className="ml-auto h-4 w-4" />
@@ -316,10 +351,8 @@ export function Dashboard({ onLogout }: DashboardProps) {
           <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
             <SidebarTrigger />
             <Separator orientation="vertical" className="mr-2 h-6" />
-            <div className="flex flex-1 items-center justify-between">
-              <h1 className="text-lg">
-                {currentHeading}
-              </h1>
+            <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <h1 className="text-lg">{currentHeading}</h1>
               <Button variant="outline" size="sm" onClick={onLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Déconnexion
@@ -334,3 +367,4 @@ export function Dashboard({ onLogout }: DashboardProps) {
     </SidebarProvider>
   );
 }
+

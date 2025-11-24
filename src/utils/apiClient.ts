@@ -3,9 +3,49 @@ import { getAuthToken } from "../services/tokenStorage";
 const DEFAULT_BASE_URL = "https://api-dev.faroty.com";
 
 // Resolve import.meta.env safely (some TypeScript configs may not have env typed)
-const _import_meta_env: any = (typeof import.meta !== 'undefined' && (import.meta as any).env) ? (import.meta as any).env : undefined;
-// Use provided VITE_API_BASE_URL or default to remote API
-export const API_BASE_URL = (_import_meta_env?.VITE_API_BASE_URL?.trim().replace(/\/+$/g, "") || DEFAULT_BASE_URL);
+const _import_meta_env: any =
+  typeof import.meta !== "undefined" && (import.meta as any).env
+    ? (import.meta as any).env
+    : undefined;
+
+const normalizedEnvBase = (() => {
+  const raw = _import_meta_env?.VITE_API_BASE_URL;
+  if (typeof raw !== "string") return "";
+  return raw.trim().replace(/\/+$/g, "");
+})();
+
+const compileTimeProxy =
+  !_import_meta_env?.SSR &&
+  Boolean(_import_meta_env?.DEV) &&
+  (normalizedEnvBase === "" || normalizedEnvBase === "/api");
+
+const runtimeWantsProxy = (() => {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  const isLocal =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.startsWith("192.168.") ||
+    host.endsWith(".local");
+  const proxyableBase =
+    normalizedEnvBase === "" ||
+    normalizedEnvBase === "/" ||
+    normalizedEnvBase === "/api" ||
+    normalizedEnvBase === DEFAULT_BASE_URL;
+  return isLocal && proxyableBase;
+})();
+
+const shouldUseProxy = compileTimeProxy || runtimeWantsProxy;
+
+const proxyableBases = [DEFAULT_BASE_URL];
+if (normalizedEnvBase && normalizedEnvBase !== DEFAULT_BASE_URL) {
+  proxyableBases.push(normalizedEnvBase);
+}
+
+// In dev, default to proxy (relative paths) unless a base was explicitly provided
+export const API_BASE_URL = shouldUseProxy
+  ? normalizedEnvBase || ""
+  : normalizedEnvBase || DEFAULT_BASE_URL;
 
 type QueryRecord = Record<string, string | number | boolean | undefined | null>;
 
@@ -19,7 +59,18 @@ const DEFAULT_HEADERS: HeadersInit = {
 };
 
 function buildUrl(path: string, query?: QueryRecord) {
-  // Si le path est déjà une URL complète, l'utiliser directement
+  // Si on est en mode proxy, convertir les URLs absolues connues en chemins relatifs
+  if (shouldUseProxy && path.startsWith("http")) {
+    const matchingBase = proxyableBases.find(
+      (base) => base && path.toLowerCase().startsWith(base.toLowerCase()),
+    );
+    if (matchingBase) {
+      const relative = path.slice(matchingBase.length) || "/";
+      return buildUrl(relative, query);
+    }
+  }
+
+  // Si le path est déjà une URL complète (et non proxyable), l'utiliser directement
   if (path.startsWith("http")) {
     const url = new URL(path);
     if (query) {

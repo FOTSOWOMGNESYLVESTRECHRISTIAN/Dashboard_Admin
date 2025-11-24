@@ -113,6 +113,58 @@ server: {
         });
       },
     },
+    '/souscription': {
+      target: 'https://api-dev.faroty.com',
+      changeOrigin: true,
+      secure: false,
+      rewrite: (path) => {
+        console.log('[PROXY] Rewriting SOUSCRIPTION path:', path);
+        return path;
+      },
+      configure: (proxy, _options) => {
+        proxy.on('proxyReq', (proxyReq, req, _res) => {
+          console.log('[PROXY] Sending SOUSCRIPTION to API:', req.method, req.url);
+        });
+
+        proxy.on('proxyRes', (proxyRes: any, req: any, _res: any) => {
+          try {
+            const headers = proxyRes.headers || {};
+            headers['access-control-allow-origin'] = '*';
+            headers['Access-Control-Allow-Origin'] = '*';
+            proxyRes.headers = headers;
+            console.log('[PROXY] SOUSCRIPTION Response from API (forced CORS *):', proxyRes.statusCode, req.url);
+          } catch (err) {
+            console.warn('[PROXY] Failed to force SOUSCRIPTION CORS header:', err);
+          }
+        });
+      },
+    },
+    '/payments': {
+      target: 'https://api-dev.faroty.com',
+      changeOrigin: true,
+      secure: false,
+      rewrite: (path) => {
+        console.log('[PROXY] Rewriting PAYMENTS path:', path);
+        return path;
+      },
+      configure: (proxy, _options) => {
+        proxy.on('proxyReq', (proxyReq, req, _res) => {
+          console.log('[PROXY] Sending PAYMENTS to API:', req.method, req.url);
+        });
+
+        proxy.on('proxyRes', (proxyRes: any, req: any, _res: any) => {
+          try {
+            const headers = proxyRes.headers || {};
+            headers['access-control-allow-origin'] = '*';
+            headers['Access-Control-Allow-Origin'] = '*';
+            proxyRes.headers = headers;
+            console.log('[PROXY] PAYMENTS Response from API (forced CORS *):', proxyRes.statusCode, req.url);
+          } catch (err) {
+            console.warn('[PROXY] Failed to force PAYMENTS CORS header:', err);
+          }
+        });
+      },
+    },
   },
 },
   });

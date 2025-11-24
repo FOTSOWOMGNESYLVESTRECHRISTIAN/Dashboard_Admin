@@ -4,6 +4,7 @@ const TEMP_TOKEN_KEY = 'temp_token';
 const TEMP_TOKEN_EXPIRES_AT_KEY = 'temp_token_expires_at';
 const AUTH_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
+const USER_PROFILE_KEY = 'user_profile';
 
 export const setTempToken = (token: string, expiresAtMs?: number): void => {
   localStorage.setItem(TEMP_TOKEN_KEY, token);
@@ -65,6 +66,7 @@ export const clearAllTokens = (): void => {
   clearTempToken();
   clearAuthToken();
   clearRefreshToken();
+  clearUserProfile();
 };
 
 // Vérifier si l'utilisateur est connecté
@@ -79,4 +81,30 @@ export const isAuthenticated = (): boolean => {
   } catch {
     return false;
   }
+};
+
+export const setUserProfile = (user: any): void => {
+  if (!user) {
+    localStorage.removeItem(USER_PROFILE_KEY);
+    return;
+  }
+  try {
+    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(user));
+  } catch {
+    localStorage.setItem(USER_PROFILE_KEY, '');
+  }
+};
+
+export const getUserProfile = <T = any>(): T | null => {
+  const raw = localStorage.getItem(USER_PROFILE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+};
+
+export const clearUserProfile = (): void => {
+  localStorage.removeItem(USER_PROFILE_KEY);
 };

@@ -21,7 +21,7 @@ const categoryData = [
   { name: "Autres", value: 5 },
 ];
 
-const COLORS = ["#8b68a6", "#6b4685", "#a888c4", "#7d5b93", "#c4b5d3"];
+const COLORS = ["#68a6a6", "#d8df15", "#b55b12", "#4b30a5", "#c92c2c"];
 
 type PeriodType = "7jours" | "14jours" | "mois" | "2mois";
 
@@ -40,10 +40,10 @@ export function DashboardStats() {
     <div className="space-y-6">
       {/* En-tête */}
       <div className="border-b border-yellow-500 pb-4">
-        <h2 className="text-gray-900">Statistiques du Dashboard</h2>
-        <p className="text-gray-600">
-          Vue d'ensemble de vos applications et subscriptions
-        </p>
+        <div className="space=y-1">
+          <h1 className="text-gray-900 text-xl font-semibold">Statistiques du Dashboard</h1>
+        </div>
+        <p className="text-gray-400 text-sm">Vue d'ensemble de vos applications et subscriptions</p>
       </div>
 
       {/* Cartes de statistiques */}
@@ -60,9 +60,9 @@ export function DashboardStats() {
                   <span className="text-3xl text-gray-900">130</span>
                   <span className="text-sm text-gray-500">+20%</span>
                 </div>
-                <p className="text-sm text-gray-600">par rapport au mois dernier</p>
+                <p className="text-xs text-gray-400">par rapport au mois dernier</p>
               </div>
-              <p className="text-sm text-gray-700">Total Applications</p>
+              <p className="text-gray-900 text-lg font-semibold">Total Applications</p>
             </div>
           </CardContent>
         </Card>
@@ -79,9 +79,9 @@ export function DashboardStats() {
                   <span className="text-3xl text-gray-900">368</span>
                   <span className="text-sm text-gray-500">+15%</span>
                 </div>
-                <p className="text-sm text-gray-600">par rapport au mois dernier</p>
+                <p className="text-xs text-gray-400">par rapport au mois dernier</p>
               </div>
-              <p className="text-sm text-gray-700">Subscriptions Actives</p>
+              <p className="text-gray-900 text-lg font-semibold">Subscriptions Actives</p>
             </div>
           </CardContent>
         </Card>
@@ -98,9 +98,9 @@ export function DashboardStats() {
                   <span className="text-3xl text-gray-900">+24%</span>
                   <span className="text-sm text-gray-500">↑</span>
                 </div>
-                <p className="text-sm text-gray-600">Croissance mensuelle</p>
+                <p className="text-xs text-gray-400">Croissance mensuelle</p>
               </div>
-              <p className="text-sm text-gray-700">Taux de Croissance</p>
+              <p className="text-gray-900 text-lg font-semibold">Taux de Croissance</p>
             </div>
           </CardContent>
         </Card>
@@ -117,9 +117,9 @@ export function DashboardStats() {
                   <span className="text-3xl text-gray-900">$12,450</span>
                   <span className="text-sm text-gray-500">+18%</span>
                 </div>
-                <p className="text-sm text-gray-600">par rapport au mois dernier</p>
+                <p className="text-xs text-gray-400">par rapport au mois dernier</p>
               </div>
-              <p className="text-sm text-gray-700">Revenu Mensuel</p>
+              <p className="text-gray-900 text-lg font-semibold">Revenu Mensuel</p>
             </div>
           </CardContent>
         </Card>
@@ -132,8 +132,8 @@ export function DashboardStats() {
           <CardHeader>
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
-                <CardTitle className="text-gray-900">Applications & Subscriptions</CardTitle>
-                <CardDescription className="text-gray-600">
+                <CardTitle className="text-gray-900 text-lg fond-semibold">Applications & Subscriptions</CardTitle>
+                <CardDescription className="text-gray-400 text-xs">
                   Évolution mensuelle des 6 derniers mois
                 </CardDescription>
               </div>
@@ -170,8 +170,8 @@ export function DashboardStats() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="applications" fill="#8b68a6" name="Applications" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="subscriptions" fill="#6b4685" name="Subscriptions" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="applications" fill="#318754" name="Applications" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="subscriptions" fill="#98a42a" name="Subscriptions" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -180,8 +180,8 @@ export function DashboardStats() {
         <Card className="border-0 shadow-md overflow-hidden relative">
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
           <CardHeader>
-            <CardTitle className="text-gray-900">Répartition par Catégorie</CardTitle>
-            <CardDescription className="text-gray-600">
+            <CardTitle className="text-gray-900 text-lg fond-semibold">Répartition par Catégorie</CardTitle>
+            <CardDescription className="text-gray-400 text-xs">
               Distribution des applications par catégorie
             </CardDescription>
           </CardHeader>
@@ -218,8 +218,8 @@ export function DashboardStats() {
       <Card className="border-0 shadow-md overflow-hidden relative">
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
         <CardHeader>
-          <CardTitle className="text-gray-900">Tendance des Subscriptions</CardTitle>
-          <CardDescription className="text-gray-600">
+          <CardTitle className="text-gray-900 text-lg fond-semibold">Tendance des Subscriptions</CardTitle>
+          <CardDescription className="text-gray-400 text-xs">
             Croissance des subscriptions sur 6 mois
           </CardDescription>
         </CardHeader>

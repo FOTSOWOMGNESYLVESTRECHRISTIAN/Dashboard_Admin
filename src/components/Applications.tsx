@@ -1,133 +1,71 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Eye, Filter, Download } from "lucide-react";
-import type { Application } from "./ApplicationDetails";
+// src/pages/admin/Application.tsx
+import React, { useState, useEffect, useMemo } from "react";
+import { Plus, Edit, Trash, Filter, Download, Search, Check } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "../components/ui/table";
+import { Textarea } from "../components/ui/textarea";
+import { Badge } from "../components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+} from "../components/ui/dropdown-menu";
+import { toast } from "sonner";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "./ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import { toast } from "sonner@2.0.3";
+  applicationService,
+  Application,
+  ApplicationPayload,
+} from "../services/applicationService";
 
-const mockApplications: Application[] = [
-  {
-    id: "1",
-    name: "TaskMaster Pro",
-    category: "Productivité",
-    version: "2.4.1",
-    status: "active",
-    subscriptions: 1234,
-    lastUpdate: "2024-11-10",
-    description: "Application de gestion de tâches et de productivité avec collaboration en temps réel",
-    plans: [],
-    features: [],
-  },
-  {
-    id: "2",
-    name: "GameZone Ultra",
-    category: "Jeux",
-    version: "1.8.0",
-    status: "active",
-    subscriptions: 892,
-    lastUpdate: "2024-11-08",
-    description: "Plateforme de jeux multijoueurs avec chat intégré et classements",
-    plans: [],
-    features: [],
-  },
-  {
-    id: "3",
-    name: "SocialHub",
-    category: "Social",
-    version: "3.2.5",
-    status: "maintenance",
-    subscriptions: 2341,
-    lastUpdate: "2024-11-05",
-    description: "Réseau social innovant avec partage de contenu multimédia",
-    plans: [],
-    features: [],
-  },
-  {
-    id: "4",
-    name: "LearnPlus",
-    category: "Éducation",
-    version: "1.5.2",
-    status: "active",
-    subscriptions: 567,
-    lastUpdate: "2024-11-12",
-    description: "Plateforme d'apprentissage en ligne avec cours interactifs",
-    plans: [],
-    features: [],
-  },
-  {
-    id: "5",
-    name: "FitTracker",
-    category: "Santé",
-    version: "2.1.0",
-    status: "inactive",
-    subscriptions: 123,
-    lastUpdate: "2024-10-28",
-    description: "Application de suivi de fitness et santé personnalisée",
-    plans: [],
-    features: [],
-  },
-  {
-    id: "6",
-    name: "MusicStream",
-    category: "Divertissement",
-    version: "4.0.3",
-    status: "active",
-    subscriptions: 3456,
-    lastUpdate: "2024-11-11",
-    description: "Service de streaming musical avec millions de titres",
-    plans: [],
-    features: [],
-  },
-];
+type StringField = Exclude<keyof ApplicationPayload, "configuration">;
 
-const statusColors = {
-  active: "bg-green-600",
-  inactive: "bg-gray-400",
-  maintenance: "bg-amber-500",
+const buildEmptyForm = (): ApplicationPayload => ({
+  name: "",
+  description: "",
+  version: "",
+  type: "web",
+  platform: "web",
+  iconUrl: "",
+  websiteUrl: "",
+  supportEmail: "",
+  documentationUrl: "",
+  configuration: null,
+});
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
 };
 
-const statusLabels = {
-  active: "Actif",
-  inactive: "Inactif",
+const getInitials = (value?: string | null) =>
+  (value || "APP")
+    .split(" ")
+    .map((word) => word.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+const statusColorMap: Record<string, string> = {
+  active: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  inactive: "bg-slate-100 text-slate-600 border-slate-200",
+  maintenance: "bg-amber-100 text-amber-700 border-amber-200",
+};
+
+const statusLabelsMap = {
+  all: "Toutes",
+  active: "Actives",
+  inactive: "Inactives",
   maintenance: "Maintenance",
+};
+
+const formatStatus = (status?: string | null) => {
+  if (!status) return "Inconnu";
+  return status.replace(/_/g, " ").toLowerCase();
 };
 
 interface ApplicationsProps {
@@ -135,494 +73,619 @@ interface ApplicationsProps {
 }
 
 export function Applications({ onViewDetails }: ApplicationsProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [applications, setApplications] = useState<Application[]>(mockApplications);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+
+  // Dialogs
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    category: "",
-    version: "",
-    status: "active" as "active" | "inactive" | "maintenance",
-    subscriptions: 0,
-    description: "",
-  });
 
-  const filteredApplications = applications.filter((app) =>
-    app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    app.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Form
+  const [formData, setFormData] = useState<ApplicationPayload>(buildEmptyForm());
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<"all" | "active" | "inactive" | "maintenance">("all");
+  const [isExporting, setIsExporting] = useState(false);
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      category: "",
-      version: "",
-      status: "active",
-      subscriptions: 0,
-      description: "",
-    });
-  };
-
-  const handleAddApplication = () => {
-    const newApp: Application = {
-      id: (applications.length + 1).toString(),
-      name: formData.name,
-      category: formData.category,
-      version: formData.version,
-      status: formData.status,
-      subscriptions: formData.subscriptions,
-      lastUpdate: new Date().toISOString().split("T")[0],
-      description: formData.description,
-      plans: [],
-      features: [],
+  // ------------------------------
+  // 1️⃣ Charger les applications
+  // ------------------------------
+  useEffect(() => {
+    const loadApplications = async () => {
+      try {
+        setLoading(true);
+        const data = await applicationService.getAllApplications();
+        console.log("[Applications] Loaded applications:", data);
+        setApplications(data);
+      } catch (error: any) {
+        console.error("[Applications] Error loading applications:", error);
+        toast.error(error?.message || "Erreur lors du chargement des applications");
+      } finally {
+        setLoading(false);
+      }
     };
-    setApplications([...applications, newApp]);
-    setIsAddDialogOpen(false);
-    resetForm();
-    toast.success("Application ajoutée avec succès!");
-  };
 
-  const handleEditApplication = () => {
-    if (!selectedApp) return;
-    
-    setApplications(
-      applications.map((app) =>
-        app.id === selectedApp.id
-          ? {
-              ...app,
-              name: formData.name,
-              category: formData.category,
-              version: formData.version,
-              status: formData.status,
-              subscriptions: formData.subscriptions,
-              description: formData.description,
-              lastUpdate: new Date().toISOString().split("T")[0],
-            }
-          : app
-      )
-    );
-    setIsEditDialogOpen(false);
-    setSelectedApp(null);
-    resetForm();
-    toast.success("Application modifiée avec succès!");
-  };
+    loadApplications();
+  }, []);
 
-  const handleDeleteApplication = () => {
-    if (!selectedApp) return;
-    
-    setApplications(applications.filter((app) => app.id !== selectedApp.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedApp(null);
-    toast.success("Application supprimée avec succès!");
-  };
+  // ------------------------------
+  // 2️⃣ Ajouter une application
+  // ------------------------------
+  const handleAddApplication = async () => {
+    try {
+      const newApp = await applicationService.addApplication(formData);
+      setApplications(prev => [...prev, newApp]);
 
-  const openEditDialog = (app: Application) => {
-    setSelectedApp(app);
-    setFormData({
-      name: app.name,
-      category: app.category,
-      version: app.version,
-      status: app.status,
-      subscriptions: app.subscriptions,
-      description: app.description,
-    });
-    setIsEditDialogOpen(true);
-  };
+      toast.success("Application ajoutée !");
+      setIsAddOpen(false);
 
-  const openViewDialog = (app: Application) => {
-    if (onViewDetails) {
-      onViewDetails(app);
+      setFormData(buildEmptyForm());
+    } catch (err: any) {
+      toast.error(err?.message || "Erreur lors de l'ajout");
     }
   };
 
-  const openDeleteDialog = (app: Application) => {
-    setSelectedApp(app);
-    setIsDeleteDialogOpen(true);
+  // ------------------------------
+  // 3️⃣ Modifier une application
+  // ------------------------------
+  const handleEditApplication = async () => {
+    if (!selectedApp) return;
+
+    try {
+      const updated = await applicationService.updateApplication(selectedApp.id, formData);
+
+      setApplications(prev => prev.map(app => app.id === selectedApp.id ? updated : app));
+
+      toast.success("Application modifiée !");
+      setIsEditOpen(false);
+
+    } catch (err: any) {
+      toast.error(err?.message || "Erreur lors de la modification");
+    }
   };
 
-  const openAddDialog = () => {
-    resetForm();
-    setIsAddDialogOpen(true);
+  // ------------------------------
+  // 4️⃣ Supprimer une application
+  // ------------------------------
+  const handleDeleteApplication = async () => {
+    if (!selectedApp) return;
+
+    try {
+      await applicationService.deleteApplication(selectedApp.id);
+
+      setApplications(prev => prev.filter(app => app.id !== selectedApp.id));
+
+      toast.success("Application supprimée !");
+      setIsDeleteOpen(false);
+
+    } catch (err: any) {
+      toast.error(err?.message || "Erreur lors de la suppression");
+    }
   };
+
+  const handleExportToExcel = async () => {
+    if (filteredApplications.length === 0) {
+      toast.error("Aucune donnée à exporter");
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      const XLSX = await import("xlsx");
+      const data = filteredApplications.map((app) => ({
+        Nom: app.name,
+        Description: app.description || "",
+        Type: app.type || "",
+        Plateforme: app.platform || "",
+        Version: app.version || "",
+        Statut: formatStatus(app.status),
+        "Créée le": formatDate(app.createdAt),
+      }));
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Applications");
+      const timestamp = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(workbook, `applications-${timestamp}.xlsx`);
+      toast.success("Export Excel réalisé");
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Échec de l'export");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleInputChange = (field: StringField, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const filteredApplications = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    return applications.filter((app) => {
+      const matchesSearch =
+        term === "" ||
+        app.name?.toLowerCase().includes(term) ||
+        app.description?.toLowerCase().includes(term) ||
+        app.type?.toLowerCase().includes(term) ||
+        app.platform?.toLowerCase().includes(term);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (app.status || "inactive").toLowerCase() === statusFilter.toLowerCase();
+      return matchesSearch && matchesStatus;
+    });
+  }, [applications, searchTerm, statusFilter]);
+
+  // ------------------------------
+  // Pagination calculs
+  // ------------------------------
+  const indexLast = currentPage * itemsPerPage;
+  const indexFirst = indexLast - itemsPerPage;
+  const currentItems = filteredApplications.slice(indexFirst, indexLast);
+  const totalPages = Math.max(1, Math.ceil(filteredApplications.length / itemsPerPage));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
-    <div className="space-y-6 h-full flex flex-col overflow-hidden">
-      {/* En-tête avec bordure jaune */}
-      <div className="border-b border-yellow-500 pb-4 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h2 className="text-gray-900">Liste des Applications</h2>
-          <p className="text-gray-600">
-            Gérez toutes vos applications en un seul endroit
-          </p>
-        </div>
-        <Button onClick={openAddDialog} className="bg-[#1e3a5f] hover:bg-[#152d4a] text-white">
-          <Plus className="mr-2 h-4 w-4" />
-          Nouvelle Application
-        </Button>
-      </div>
-
-      {/* Carte principale avec bordure jaune en bas */}
-      <Card className="flex-1 flex flex-col overflow-hidden border-0 shadow-md relative">
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-        <CardHeader className="flex-shrink-0">
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
-              <CardTitle className="text-gray-900">Applications</CardTitle>
-              <CardDescription className="text-gray-600">
-                {filteredApplications.length} application(s) trouvée(s)
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
+    <div className="p-6 space-y-6">
+      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 text-black p-6 flex flex-col gap-4 shadow-[0_25px_70px_rgba(5,10,30,0.35)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="uppercase tracking-[0.35em] text-xs text-black">Applications</p>
+            <h1 className="text-3xl font-semibold">Centre de gestion</h1>
+            <p className="text-white/70 text-sm max-w-2xl mt-1">
+              Administrez vos apps, ajoutez des fonctionnalités et publiez des plans avec un style distinct.
+            </p>
+          </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                size="sm"
-                className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-0 h-9"
+                className="rounded-full border-white/40 text-white hover:bg-white/10"
               >
-                <Filter className="mr-2 h-4 w-4" />
+                <Filter className="w-4 h-4 mr-2" />
                 Filtres
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-0 h-9"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Exporter
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col overflow-hidden">
-          <div className="mb-4 flex-shrink-0">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher une application..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-gray-50 border-0"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 overflow-hidden flex-1 min-h-0 bg-white">
-            <div className="h-full overflow-y-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-gray-50 z-10">
-                  <TableRow className="hover:bg-gray-50 border-b border-gray-200">
-                    <TableHead className="text-gray-700 whitespace-nowrap min-w-[150px]">Nom</TableHead>
-                    <TableHead className="text-gray-700 whitespace-nowrap min-w-[120px]">Catégorie</TableHead>
-                    <TableHead className="text-gray-700 whitespace-nowrap min-w-[80px]">Version</TableHead>
-                    <TableHead className="text-gray-700 whitespace-nowrap min-w-[100px]">Statut</TableHead>
-                    <TableHead className="text-right text-gray-700 whitespace-nowrap min-w-[110px]">Subscriptions</TableHead>
-                    <TableHead className="text-gray-700 whitespace-nowrap min-w-[110px]">Dernière MAJ</TableHead>
-                    <TableHead className="text-right text-gray-700 whitespace-nowrap min-w-[70px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredApplications.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-gray-500">
-                        Aucune application trouvée
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredApplications.map((app) => (
-                      <TableRow key={app.id} className="hover:bg-gray-50 border-b border-gray-100">
-                        <TableCell className="whitespace-nowrap text-gray-900">{app.name}</TableCell>
-                        <TableCell className="whitespace-nowrap text-gray-600">{app.category}</TableCell>
-                        <TableCell className="whitespace-nowrap text-gray-600">{app.version}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <Badge
-                            variant="secondary"
-                            className={`${statusColors[app.status]} text-white`}
-                          >
-                            {statusLabels[app.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap text-gray-900">
-                          {app.subscriptions.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-gray-600">
-                          {new Date(app.lastUpdate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => openViewDialog(app)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Voir les détails
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openEditDialog(app)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Modifier
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                className="text-destructive"
-                                onClick={() => openDeleteDialog(app)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Supprimer
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {[
+                { value: "all", label: "Tous" },
+                { value: "active", label: "Actives" },
+                { value: "inactive", label: "Inactives" },
+                { value: "maintenance", label: "Maintenance" },
+              ].map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => setStatusFilter(option.value as typeof statusFilter)}
+                >
+                  {statusFilter === option.value && (
+                    <Check className="mr-2 h-4 w-4 text-emerald-600" />
                   )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="outline"
+            className="rounded-full border-white/40 text-white hover:bg-white/10"
+            onClick={handleExportToExcel}
+            disabled={isExporting}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {isExporting ? "Export..." : "Exporter"}
+          </Button>
+        </div>
+        </div>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-4 flex-shrink-0">
-            <div className="text-sm text-gray-500">
-              Chargement...
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-0"
-              >
-                Précédent
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-0"
-              >
-                Suivant
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            className="rounded-full bg-amber-500 text-white hover:bg-amber-400"
+            onClick={() => setIsAddOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Ajouter une application
+          </Button>
+        </div>
+      </div>
 
-      {/* Dialog Ajouter une application */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle>Ajouter une nouvelle application</DialogTitle>
-            <DialogDescription>
-              Remplissez les informations de la nouvelle application
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="add-name">Nom de l'application</Label>
-              <Input
-                id="add-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ex: TaskMaster Pro"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-category">Catégorie</Label>
-              <Input
-                id="add-category"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="Ex: Productivité"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-version">Version</Label>
-              <Input
-                id="add-version"
-                value={formData.version}
-                onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                placeholder="Ex: 1.0.0"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-status">Statut</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: "active" | "inactive" | "maintenance") =>
-                  setFormData({ ...formData, status: value })
-                }
-              >
-                <SelectTrigger id="add-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Actif</SelectItem>
-                  <SelectItem value="inactive">Inactif</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-subscriptions">Nombre de subscriptions</Label>
-              <Input
-                id="add-subscriptions"
-                type="number"
-                value={formData.subscriptions}
-                onChange={(e) =>
-                  setFormData({ ...formData, subscriptions: parseInt(e.target.value) || 0 })
-                }
-                placeholder="Ex: 100"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-description">Description</Label>
-              <Textarea
-                id="add-description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Ex: Application de gestion..."
-                rows={3}
-              />
-            </div>
+      <div className="rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.08)] overflow-hidden">
+        <div className="px-8 py-4 border-t border-slate-100 flex flex-wrap items-center gap-4 justify-between">
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Rechercher une application..."
+              className="pl-10 rounded-full bg-slate-50 border-slate-200"
+            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button 
-              onClick={handleAddApplication}
-              className="bg-[#8b68a6] hover:bg-[#6b4685]"
-              disabled={!formData.name || !formData.category || !formData.version}
+          {statusFilter !== "all" && (
+            <Badge className="rounded-full bg-slate-900 text-white px-4 py-2">
+              Filtre: {statusLabelsMap[statusFilter as keyof typeof statusLabelsMap] || statusFilter}
+              <button
+                className="ml-2 text-xs uppercase tracking-wide"
+                onClick={() => setStatusFilter("all")}
+              >
+                Réinitialiser
+              </button>
+            </Badge>
+          )}
+        </div>
+        <div className="px-2 pb-2">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nom</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Type & Plateforme</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Date de création</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6 font-medium text-slate-500">
+                    Chargement...
+                  </TableCell>
+                </TableRow>
+              ) : currentItems.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6 font-medium text-slate-500">
+                    Aucune application trouvée
+                  </TableCell>
+                </TableRow>
+              ) : (
+                currentItems.map((app) => (
+                  <TableRow key={app.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center font-semibold">
+                          {getInitials(app.name)}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900">{app.name}</p>
+                          <p className="text-xs text-slate-400">{app.id}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-slate-500">{app.description || "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium capitalize text-slate-900">{app.type || "—"}</span>
+                        <span className="text-xs text-slate-400">{app.platform || "—"}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-slate-600">{app.version || "—"}</TableCell>
+                    <TableCell className="text-slate-600">{formatDate(app.createdAt)}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          statusColorMap[app.status || ""] || "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        {formatStatus(app.status)}
+                      </Badge>
+                      {onViewDetails && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() => onViewDetails(app)}
+                        >
+                          Détails
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => {
+                          setSelectedApp(app);
+                          setFormData({
+                            name: app.name ?? "",
+                            description: app.description ?? "",
+                            version: app.version ?? "",
+                            type: app.type ?? "web",
+                            platform: app.platform ?? "web",
+                            iconUrl: app.iconUrl ?? "",
+                            websiteUrl: app.websiteUrl ?? "",
+                            supportEmail: app.supportEmail ?? "",
+                            documentationUrl: app.documentationUrl ?? "",
+                            configuration: app.configuration ?? null,
+                          });
+                          setIsEditOpen(true);
+                        }}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => {
+                          setSelectedApp(app);
+                          setIsDeleteOpen(true);
+                        }}
+                      >
+                        <Trash className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+            {!loading && (
+              <TableCaption className="text-left px-6">
+                {filteredApplications.length} application{filteredApplications.length > 1 ? "s" : ""} correspondant{filteredApplications.length > 1 ? "s" : ""} à vos critères.
+              </TableCaption>
+            )}
+          </Table>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center justify-between border-t border-slate-200 px-8 py-4 bg-white/80 gap-3">
+          <span className="text-sm text-slate-500">
+            {loading ? "Chargement..." : `${filteredApplications.length} élément(s)`}
+          </span>
+
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              className="rounded-full px-6"
+              disabled={currentPage === 1}
+              onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
             >
-              Ajouter
+              Précédent
             </Button>
+            <Button
+              variant="outline"
+              className="rounded-full px-6"
+              disabled={currentPage === totalPages || totalPages === 0}
+              onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+            >
+              Suivant
+            </Button>
+          </div>
+        </div>
+      </div>
+      {/* ADD DIALOG */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajouter une application</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Nom</Label>
+                <Input
+                  value={formData.name}
+                  onChange={e => handleInputChange("name", e.target.value)}
+                  placeholder="Crowdfunding"
+                />
+              </div>
+              <div>
+                <Label>Version</Label>
+                <Input
+                  value={formData.version}
+                  onChange={e => handleInputChange("version", e.target.value)}
+                  placeholder="1.0.0"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Type</Label>
+                <Input
+                  value={formData.type}
+                  onChange={e => handleInputChange("type", e.target.value)}
+                  placeholder="web"
+                />
+              </div>
+              <div>
+                <Label>Plateforme</Label>
+                <Input
+                  value={formData.platform}
+                  onChange={e => handleInputChange("platform", e.target.value)}
+                  placeholder="web"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={formData.description}
+                onChange={e => handleInputChange("description", e.target.value)}
+                placeholder="Application de levée de fonds"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Icon URL</Label>
+                <Input
+                  value={formData.iconUrl}
+                  onChange={e => handleInputChange("iconUrl", e.target.value)}
+                  placeholder="https://example.com/icon.png"
+                />
+              </div>
+              <div>
+                <Label>Site web</Label>
+                <Input
+                  value={formData.websiteUrl}
+                  onChange={e => handleInputChange("websiteUrl", e.target.value)}
+                  placeholder="https://example.com"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Email support</Label>
+                <Input
+                  type="email"
+                  value={formData.supportEmail}
+                  onChange={e => handleInputChange("supportEmail", e.target.value)}
+                  placeholder="support@example.com"
+                />
+              </div>
+              <div>
+                <Label>Documentation</Label>
+                <Input
+                  value={formData.documentationUrl}
+                  onChange={e => handleInputChange("documentationUrl", e.target.value)}
+                  placeholder="https://example.com/docs"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={handleAddApplication}>Ajouter</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Modifier une application */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[525px]">
+      {/* EDIT DIALOG */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Modifier l'application</DialogTitle>
-            <DialogDescription>
-              Modifiez les informations de l'application
-            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">Nom de l'application</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ex: TaskMaster Pro"
-              />
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Nom</Label>
+                <Input
+                  value={formData.name}
+                  onChange={e => handleInputChange("name", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Version</Label>
+                <Input
+                  value={formData.version}
+                  onChange={e => handleInputChange("version", e.target.value)}
+                />
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-category">Catégorie</Label>
-              <Input
-                id="edit-category"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="Ex: Productivité"
-              />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Type</Label>
+                <Input
+                  value={formData.type}
+                  onChange={e => handleInputChange("type", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Plateforme</Label>
+                <Input
+                  value={formData.platform}
+                  onChange={e => handleInputChange("platform", e.target.value)}
+                />
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-version">Version</Label>
-              <Input
-                id="edit-version"
-                value={formData.version}
-                onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                placeholder="Ex: 1.0.0"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-status">Statut</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: "active" | "inactive" | "maintenance") =>
-                  setFormData({ ...formData, status: value })
-                }
-              >
-                <SelectTrigger id="edit-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Actif</SelectItem>
-                  <SelectItem value="inactive">Inactif</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-subscriptions">Nombre de subscriptions</Label>
-              <Input
-                id="edit-subscriptions"
-                type="number"
-                value={formData.subscriptions}
-                onChange={(e) =>
-                  setFormData({ ...formData, subscriptions: parseInt(e.target.value) || 0 })
-                }
-                placeholder="Ex: 100"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-description">Description</Label>
+
+            <div>
+              <Label>Description</Label>
               <Textarea
-                id="edit-description"
                 value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Ex: Application de gestion..."
-                rows={3}
+                onChange={e => handleInputChange("description", e.target.value)}
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Icon URL</Label>
+                <Input
+                  value={formData.iconUrl}
+                  onChange={e => handleInputChange("iconUrl", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Site web</Label>
+                <Input
+                  value={formData.websiteUrl}
+                  onChange={e => handleInputChange("websiteUrl", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Email support</Label>
+                <Input
+                  type="email"
+                  value={formData.supportEmail}
+                  onChange={e => handleInputChange("supportEmail", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Documentation</Label>
+                <Input
+                  value={formData.documentationUrl}
+                  onChange={e => handleInputChange("documentationUrl", e.target.value)}
+                />
+              </div>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button 
-              onClick={handleEditApplication}
-              className="bg-[#8b68a6] hover:bg-[#6b4685]"
-              disabled={!formData.name || !formData.category || !formData.version}
-            >
-              Enregistrer
+            <Button onClick={handleEditApplication}>Sauvegarder</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE DIALOG */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer l'application</DialogTitle>
+          </DialogHeader>
+
+          <p className="text-gray-600">
+            Voulez-vous vraiment supprimer <span className="font-semibold">{selectedApp?.name}</span> ?
+          </p>
+
+          <DialogFooter>
+            <Button variant="destructive" onClick={handleDeleteApplication}>
+              Supprimer
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* AlertDialog Supprimer */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Êtes-vous sûr ?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Cette action est irréversible. L'application "{selectedApp?.name}" sera
-              définitivement supprimée de la base de données.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteApplication}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Supprimer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
+
+export default Applications;
