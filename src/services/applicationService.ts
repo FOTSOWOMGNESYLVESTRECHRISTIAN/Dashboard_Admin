@@ -47,6 +47,23 @@ export interface PlanFeatureAssignmentPayload {
   included?: boolean;
 }
 
+export interface TrialPolicyPayload {
+  applicationId: string;
+  enabled: boolean;
+  trialPeriodInDays: number;
+  unlimitedAccess: boolean;
+}
+
+export interface TrialPolicy {
+  id: string;
+  applicationId: string;
+  enabled: boolean;
+  trialPeriodInDays: number;
+  unlimitedAccess: boolean;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
 type ApiEnvelope<T> =
   | T
   | {
@@ -301,6 +318,290 @@ export const applicationService = {
     } catch (error) {
       console.error("[applicationService] Error assigning feature to plan:", error, data);
       throw error instanceof Error ? error : new Error("Échec de l'association fonctionnalité/plan");
+    }
+  },
+
+  async getAllTrialPolicies(page: number = 0, size: number = 10): Promise<{
+    content: TrialPolicy[];
+    page: number;
+    size: number;
+    totalElements: number;
+    totalPages: number;
+    last: boolean;
+    first: boolean;
+    hasNext: boolean;
+    hasPrevious: boolean;
+  }> {
+    try {
+      const payload = await apiClient.get<ApiEnvelope<any>>(
+        API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES,
+        {
+          query: { page, size },
+        },
+      );
+      const raw = unwrap<Record<string, any>>(payload);
+      
+      // La réponse peut être dans data.content ou directement dans raw
+      const responseData = raw?.data || raw;
+      
+      // Si c'est directement une liste (array), on la wrappe
+      if (Array.isArray(responseData)) {
+        return {
+          content: responseData.map((item: any) => ({
+            id: item.id,
+            applicationId: item.applicationId,
+            enabled: item.enabled ?? true,
+            trialPeriodInDays: item.trialPeriodInDays ?? 0,
+            unlimitedAccess: item.unlimitedAccess ?? false,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+          })),
+          page: 0,
+          size: responseData.length,
+          totalElements: responseData.length,
+          totalPages: 1,
+          last: true,
+          first: true,
+          hasNext: false,
+          hasPrevious: false,
+        };
+      }
+      
+      // Sinon, c'est un objet paginé
+      const content = responseData?.content || responseData?.items || [];
+      
+      return {
+        content: content.map((item: any) => ({
+          id: item.id,
+          applicationId: item.applicationId,
+          enabled: item.enabled ?? true,
+          trialPeriodInDays: item.trialPeriodInDays ?? 0,
+          unlimitedAccess: item.unlimitedAccess ?? false,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        })),
+        page: responseData?.page ?? page,
+        size: responseData?.size ?? size,
+        totalElements: responseData?.totalElements ?? content.length,
+        totalPages: responseData?.totalPages ?? 1,
+        last: responseData?.last ?? true,
+        first: responseData?.first ?? true,
+        hasNext: responseData?.hasNext ?? false,
+        hasPrevious: responseData?.hasPrevious ?? false,
+      };
+    } catch (error) {
+      console.error("[applicationService] Error fetching trial policies:", error);
+      throw error instanceof Error ? error : new Error("Impossible de récupérer les politiques d'essai");
+    }
+  },
+
+  async getTrialPolicyByApplication(applicationId: string): Promise<TrialPolicy | null> {
+    try {
+      // Essayer d'abord avec le chemin spécifique
+      try {
+        const payload = await apiClient.get<ApiEnvelope<any>>(
+          API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICY_BY_APPLICATION(applicationId),
+        );
+        const raw = unwrap<Record<string, any>>(payload);
+        
+        // Gérer la réponse qui peut être dans data ou directement dans raw
+        const policyData = raw?.data || raw;
+        
+        if (!policyData || !policyData.id) {
+          return null;
+        }
+        
+        return {
+          id: policyData.id,
+          applicationId: policyData.applicationId || applicationId,
+          enabled: policyData.enabled ?? true,
+          trialPeriodInDays: policyData.trialPeriodInDays ?? 0,
+          unlimitedAccess: policyData.unlimitedAccess ?? false,
+          createdAt: policyData.createdAt,
+          updatedAt: policyData.updatedAt,
+        };
+      } catch (pathError: any) {
+        // Si le chemin spécifique ne fonctionne pas, essayer avec un query parameter
+        console.warn("[applicationService] Path-based fetch failed, trying with query parameter...");
+        const payload = await apiClient.get<ApiEnvelope<any>>(
+          API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES,
+          {
+            query: { applicationId },
+          },
+        );
+        const raw = unwrap<Record<string, any>>(payload);
+        
+        // Si c'est une liste, prendre le premier élément
+        if (Array.isArray(raw)) {
+          const policy = raw.find((p: any) => p.applicationId === applicationId);
+          if (!policy || !policy.id) {
+            return null;
+          }
+          return {
+            id: policy.id,
+            applicationId: policy.applicationId || applicationId,
+            enabled: policy.enabled ?? true,
+            trialPeriodInDays: policy.trialPeriodInDays ?? 0,
+            unlimitedAccess: policy.unlimitedAccess ?? false,
+            createdAt: policy.createdAt,
+            updatedAt: policy.updatedAt,
+          };
+        }
+        
+        // Sinon, traiter comme un objet unique
+        const policyData = raw?.data || raw;
+        if (!policyData || !policyData.id) {
+          return null;
+        }
+        
+        return {
+          id: policyData.id,
+          applicationId: policyData.applicationId || applicationId,
+          enabled: policyData.enabled ?? true,
+          trialPeriodInDays: policyData.trialPeriodInDays ?? 0,
+          unlimitedAccess: policyData.unlimitedAccess ?? false,
+          createdAt: policyData.createdAt,
+          updatedAt: policyData.updatedAt,
+        };
+      }
+    } catch (error) {
+      console.error("[applicationService] Error fetching trial policy:", error, { applicationId });
+      // Si la politique n'existe pas encore, retourner null plutôt que d'échouer
+      return null;
+    }
+  },
+
+  async createOrUpdateTrialPolicy(data: TrialPolicyPayload, existingPolicyId?: string): Promise<TrialPolicy> {
+    try {
+      // Si on a déjà l'ID de la politique, utiliser PUT directement avec l'ID dans l'URL
+      if (existingPolicyId) {
+        const payload = await apiClient.put<ApiEnvelope<any>>(
+          `${API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES}/${existingPolicyId}`,
+          data,
+        );
+        const raw = unwrap<Record<string, any>>(payload);
+        const policyData = raw.data || raw;
+        
+        return {
+          id: policyData.id || raw.id || existingPolicyId,
+          applicationId: policyData.applicationId || data.applicationId,
+          enabled: policyData.enabled ?? data.enabled,
+          trialPeriodInDays: policyData.trialPeriodInDays ?? data.trialPeriodInDays,
+          unlimitedAccess: policyData.unlimitedAccess ?? data.unlimitedAccess,
+          createdAt: policyData.createdAt || raw.createdAt,
+          updatedAt: policyData.updatedAt || raw.updatedAt,
+        };
+      }
+
+      // Sinon, vérifier si une politique existe déjà pour cette application
+      const existingPolicy = await this.getTrialPolicyByApplication(data.applicationId);
+
+      // Si une politique existe, utiliser PUT pour la mettre à jour avec l'ID dans l'URL
+      if (existingPolicy && existingPolicy.id) {
+        // Utiliser PUT avec l'ID dans l'URL (comme pour updateApplication)
+        const payload = await apiClient.put<ApiEnvelope<any>>(
+          `${API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES}/${existingPolicy.id}`,
+          data,
+        );
+        const raw = unwrap<Record<string, any>>(payload);
+        const policyData = raw.data || raw;
+        
+        return {
+          id: policyData.id || raw.id || existingPolicy.id,
+          applicationId: policyData.applicationId || data.applicationId,
+          enabled: policyData.enabled ?? data.enabled,
+          trialPeriodInDays: policyData.trialPeriodInDays ?? data.trialPeriodInDays,
+          unlimitedAccess: policyData.unlimitedAccess ?? data.unlimitedAccess,
+          createdAt: policyData.createdAt || raw.createdAt || existingPolicy.createdAt,
+          updatedAt: policyData.updatedAt || raw.updatedAt,
+        };
+      }
+      
+      // Aucune politique existante, utiliser POST pour créer
+      const payload = await apiClient.post<ApiEnvelope<any>>(
+        API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES,
+        data,
+      );
+      const raw = unwrap<Record<string, any>>(payload);
+      const policyData = raw.data || raw;
+      
+      return {
+        id: policyData.id || raw.id,
+        applicationId: policyData.applicationId || data.applicationId,
+        enabled: policyData.enabled ?? data.enabled,
+        trialPeriodInDays: policyData.trialPeriodInDays ?? data.trialPeriodInDays,
+        unlimitedAccess: policyData.unlimitedAccess ?? data.unlimitedAccess,
+        createdAt: policyData.createdAt || raw.createdAt,
+        updatedAt: policyData.updatedAt || raw.updatedAt,
+      };
+    } catch (error: any) {
+      // Si l'erreur est 409 (conflit), cela signifie qu'une politique existe mais n'a pas été trouvée
+      // Réessayer en récupérant la politique et en utilisant PUT avec l'ID
+      if (error.message?.includes("409") || error.message?.includes("conflit") || error.message?.includes("conflict") || error.message?.includes("Conflict")) {
+        console.warn("[applicationService] Conflict (409) detected, fetching existing policy and retrying with PUT...");
+        try {
+          const existing = await this.getTrialPolicyByApplication(data.applicationId);
+          if (existing && existing.id) {
+            const payload = await apiClient.put<ApiEnvelope<any>>(
+              `${API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES}/${existing.id}`,
+              data,
+            );
+            const raw = unwrap<Record<string, any>>(payload);
+            const policyData = raw.data || raw;
+            
+            return {
+              id: policyData.id || raw.id || existing.id,
+              applicationId: policyData.applicationId || data.applicationId,
+              enabled: policyData.enabled ?? data.enabled,
+              trialPeriodInDays: policyData.trialPeriodInDays ?? data.trialPeriodInDays,
+              unlimitedAccess: policyData.unlimitedAccess ?? data.unlimitedAccess,
+              createdAt: policyData.createdAt || raw.createdAt || existing.createdAt,
+              updatedAt: policyData.updatedAt || raw.updatedAt,
+            };
+          }
+        } catch (retryError: any) {
+          console.error("[applicationService] Retry with PUT after 409 conflict failed:", retryError);
+          throw retryError;
+        }
+      }
+      
+      // Si l'erreur est 500 et qu'on a un existingPolicyId, essayer PUT avec l'ID directement
+      if ((error.message?.includes("500") || error.message?.includes("500")) && existingPolicyId) {
+        console.warn("[applicationService] 500 error detected, retrying with PUT using ID in URL...");
+        try {
+          const payload = await apiClient.put<ApiEnvelope<any>>(
+            `${API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES}/${existingPolicyId}`,
+            data,
+          );
+          const raw = unwrap<Record<string, any>>(payload);
+          const policyData = raw.data || raw;
+          
+          return {
+            id: policyData.id || raw.id || existingPolicyId,
+            applicationId: policyData.applicationId || data.applicationId,
+            enabled: policyData.enabled ?? data.enabled,
+            trialPeriodInDays: policyData.trialPeriodInDays ?? data.trialPeriodInDays,
+            unlimitedAccess: policyData.unlimitedAccess ?? data.unlimitedAccess,
+            createdAt: policyData.createdAt || raw.createdAt,
+            updatedAt: policyData.updatedAt || raw.updatedAt,
+          };
+        } catch (retryError: any) {
+          console.error("[applicationService] Retry with PUT using ID failed:", retryError);
+          throw retryError;
+        }
+      }
+      
+      console.error("[applicationService] Error creating/updating trial policy:", error, data);
+      throw error instanceof Error ? error : new Error("Échec de la création/mise à jour de la politique d'essai");
+    }
+  },
+
+  async deleteTrialPolicy(policyId: string): Promise<void> {
+    try {
+      await apiClient.delete(`${API_ENDPOINTS.SUBSCRIPTION.TRIAL_POLICIES}/${policyId}`);
+    } catch (error) {
+      console.error("[applicationService] Error deleting trial policy:", error, { policyId });
+      throw error instanceof Error ? error : new Error("Échec de la suppression de la politique d'essai");
     }
   },
 };

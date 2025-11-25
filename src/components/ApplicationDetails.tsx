@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -29,7 +29,7 @@ import {
 } from "./ui/alert-dialog";
 import { ArrowLeft, Plus, Edit, Trash2, Check, X, Tag } from "lucide-react";
 import { toast } from "sonner";
-import { applicationService, FeaturePayload, PlanPayload } from "../services/applicationService";
+import { applicationService, FeaturePayload, PlanPayload, TrialPolicyPayload, TrialPolicy } from "../services/applicationService";
 import { promotionService, PromotionPayload, Promotion } from "../services/promotionService";
 import { getUserProfile } from "../services/tokenStorage";
 
@@ -68,6 +68,23 @@ interface PlanFeatureAssignmentForm {
   quotaLimit: string;
   included: boolean;
 }
+
+interface ProgramItem {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime?: string;
+  stage?: string;
+}
+
+type DetailsTab =
+  | "overview"
+  | "tickets"
+  | "promotions"
+  | "participants"
+  | "analytics"
+  | "history";
 
 export interface Application {
   id: string;
@@ -213,6 +230,14 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
     included: true,
   });
   const [isAssigningPlanFeature, setIsAssigningPlanFeature] = useState(false);
+  const [trialPolicy, setTrialPolicy] = useState<TrialPolicy | null>(null);
+  const [isLoadingTrialPolicy, setIsLoadingTrialPolicy] = useState(false);
+  const [trialPolicyForm, setTrialPolicyForm] = useState({
+    enabled: true,
+    trialPeriodInDays: 90,
+    unlimitedAccess: true,
+  });
+  const [isSavingTrialPolicy, setIsSavingTrialPolicy] = useState(false);
 
   useEffect(() => {
     setLocalApp(application);
@@ -344,12 +369,46 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
     }
   }, []);
 
+  const loadTrialPolicy = useCallback(
+    async (appId: string) => {
+      setIsLoadingTrialPolicy(true);
+      try {
+        const policy = await applicationService.getTrialPolicyByApplication(appId);
+        setTrialPolicy(policy);
+        if (policy) {
+          setTrialPolicyForm({
+            enabled: policy.enabled,
+            trialPeriodInDays: policy.trialPeriodInDays,
+            unlimitedAccess: policy.unlimitedAccess,
+          });
+        } else {
+          // Reset to defaults if no policy exists
+          setTrialPolicyForm({
+            enabled: true,
+            trialPeriodInDays: 90,
+            unlimitedAccess: true,
+          });
+        }
+      } catch (error: any) {
+        console.error("[ApplicationDetails] Error loading trial policy", error);
+        // Don't show error toast if policy doesn't exist (it's optional)
+        if (error?.message && !error.message.includes("404")) {
+          toast.error(error.message || "Impossible de charger la politique d'essai");
+        }
+      } finally {
+        setIsLoadingTrialPolicy(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!application.id) return;
     loadFeatures(application.id);
     loadPlans(application.id);
     loadPromotions();
-  }, [application.id, loadFeatures, loadPlans, loadPromotions]);
+    loadTrialPolicy(application.id);
+  }, [application.id, loadFeatures, loadPlans, loadPromotions, loadTrialPolicy]);
 
   // Feature handlers
   const resetFeatureForm = () => {
@@ -760,6 +819,39 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
     }
   };
 
+  const handleSaveTrialPolicy = async () => {
+    if (trialPolicyForm.trialPeriodInDays < 1) {
+      toast.error("La période d'essai doit être d'au moins 1 jour");
+      return;
+    }
+    try {
+      setIsSavingTrialPolicy(true);
+      const payload: TrialPolicyPayload = {
+        applicationId: localApp.id,
+        enabled: trialPolicyForm.enabled,
+        trialPeriodInDays: trialPolicyForm.trialPeriodInDays,
+        unlimitedAccess: trialPolicyForm.unlimitedAccess,
+      };
+      // Passer l'ID de la politique existante si elle existe
+      const created = await applicationService.createOrUpdateTrialPolicy(
+        payload,
+        trialPolicy?.id
+      );
+      setTrialPolicy(created);
+      toast.success(
+        trialPolicy
+          ? "Politique d'essai mise à jour avec succès"
+          : "Politique d'essai créée avec succès"
+      );
+      await loadTrialPolicy(localApp.id);
+    } catch (error: any) {
+      console.error("[ApplicationDetails] Error saving trial policy", error);
+      toast.error(error?.message || "Impossible de sauvegarder la politique d'essai");
+    } finally {
+      setIsSavingTrialPolicy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -827,6 +919,103 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                   {localApp.description || "Aucune description"}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Période d'essai</CardTitle>
+              <CardDescription>
+                Configurez la période d'essai pour cette application
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoadingTrialPolicy ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Chargement de la politique d'essai...
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between space-x-2">
+                    <div className="flex-1 space-y-0.5">
+                      <Label htmlFor="trial-enabled">Activer la période d'essai</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Active ou désactive la période d'essai pour cette application
+                      </p>
+                    </div>
+                    <Switch
+                      id="trial-enabled"
+                      checked={trialPolicyForm.enabled}
+                      onCheckedChange={(checked) =>
+                        setTrialPolicyForm({ ...trialPolicyForm, enabled: checked })
+                      }
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="trial-period">Durée de la période d'essai (jours)</Label>
+                    <Input
+                      id="trial-period"
+                      type="number"
+                      min={1}
+                      value={trialPolicyForm.trialPeriodInDays}
+                      onChange={(e) =>
+                        setTrialPolicyForm({
+                          ...trialPolicyForm,
+                          trialPeriodInDays: parseInt(e.target.value) || 1,
+                        })
+                      }
+                      disabled={!trialPolicyForm.enabled}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Nombre de jours pendant lesquels l'application sera disponible en période d'essai
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between space-x-2">
+                    <div className="flex-1 space-y-0.5">
+                      <Label htmlFor="trial-unlimited">Accès illimité</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Permet un accès illimité pendant la période d'essai
+                      </p>
+                    </div>
+                    <Switch
+                      id="trial-unlimited"
+                      checked={trialPolicyForm.unlimitedAccess}
+                      onCheckedChange={(checked) =>
+                        setTrialPolicyForm({ ...trialPolicyForm, unlimitedAccess: checked })
+                      }
+                      disabled={!trialPolicyForm.enabled}
+                    />
+                  </div>
+
+                  {trialPolicy && (
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1">
+                      <div className="text-sm font-medium text-gray-900">Informations actuelles</div>
+                      <div className="text-xs text-muted-foreground">
+                        Créée le: {trialPolicy.createdAt 
+                          ? new Date(trialPolicy.createdAt < 1e12 ? trialPolicy.createdAt * 1000 : trialPolicy.createdAt).toLocaleDateString("fr-FR")
+                          : "—"}
+                        {trialPolicy.updatedAt && trialPolicy.updatedAt !== trialPolicy.createdAt && (
+                          <> • Modifiée le: {new Date(trialPolicy.updatedAt < 1e12 ? trialPolicy.updatedAt * 1000 : trialPolicy.updatedAt).toLocaleDateString("fr-FR")}</>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={handleSaveTrialPolicy}
+                    disabled={isSavingTrialPolicy || !trialPolicyForm.enabled}
+                    className="w-full bg-[#8b68a6] hover:bg-[#6b4685]"
+                  >
+                    {isSavingTrialPolicy
+                      ? "Enregistrement..."
+                      : trialPolicy
+                      ? "Mettre à jour la politique d'essai"
+                      : "Créer la politique d'essai"}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

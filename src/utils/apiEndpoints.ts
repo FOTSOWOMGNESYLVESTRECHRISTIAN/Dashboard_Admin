@@ -114,6 +114,7 @@ const paths = {
     quotaConsume: "/souscription/api/v1/quota/consume",
     quotaCheck: "/souscription/api/v1/quota/check",
     promotions: "/souscription/api/v1/promotions",
+    trialPolicies: "/souscription/api/v1/trial-policies",
   },
   payments: {
     accounts: "/payments/api/v1/accounts",
@@ -223,6 +224,8 @@ export interface SubscriptionEndpoints {
   SUBSCRIPTIONS: string;
   GET_OR_CREATE_SUBSCRIPTION: (contextId: string, contextType: string) => string;
   PROMOTIONS: string;
+  TRIAL_POLICIES: string;
+  TRIAL_POLICY_BY_APPLICATION: (applicationId: string) => string;
   QUOTA: {
     CONSUME: string;
     CHECK: string;
@@ -349,6 +352,9 @@ export const API_ENDPOINTS: Endpoints = {
         `/souscription/api/v1/subscriptions/context/${contextId}/${contextType}/get-or-create`,
       ),
     PROMOTIONS: joinBase(paths.subscription.promotions),
+    TRIAL_POLICIES: joinBase(paths.subscription.trialPolicies),
+    TRIAL_POLICY_BY_APPLICATION: (applicationId: string) =>
+      joinBase(`/souscription/api/v1/trial-policies/application/${applicationId}`),
     QUOTA: {
       CONSUME: joinBase(paths.subscription.quotaConsume),
       CHECK: joinBase(paths.subscription.quotaCheck),

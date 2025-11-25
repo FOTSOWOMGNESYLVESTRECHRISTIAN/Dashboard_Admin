@@ -34,6 +34,7 @@ import {
   ChevronDown,
   CreditCard,
   User as UserIcon,
+  Clock,
 } from "lucide-react";
 import { DashboardStats } from "./DashboardStats";
 import { Applications } from "./Applications";
@@ -46,6 +47,7 @@ import { UserDetails } from "./UserDetails";
 import { Payment, PaymentMethod, Wallet } from "./Payment";
 import { PaymentMethodDetails } from "./PaymentMethodDetails";
 import { WalletDetails } from "./WalletDetails";
+import { TrialPolicies } from "./TrialPolicies";
 import logo from "@/assets/64732130af5e1351819c7a94a0f8563f43705c92.png";
 import type { Application as ApiApplication } from "../services/applicationService";
 import { PAGE_LABELS } from "../utils/apiEndpoints";
@@ -55,7 +57,7 @@ interface DashboardProps {
   user?: Record<string, any> | null;
 }
 
-type Page = "stats" | "applications" | "subscriptions" | "users" | "payment" | "settings";
+type Page = "stats" | "applications" | "subscriptions" | "users" | "payment" | "settings" | "trialPolicies";
 
 export function Dashboard({ onLogout, user }: DashboardProps) {
   const [currentPage, setCurrentPage] = useState<Page>("stats");
@@ -109,6 +111,11 @@ const menuItems = [
       id: "payment" as Page,
       label: "Paiements",
       icon: CreditCard,
+    },
+    {
+      id: "trialPolicies" as Page,
+      label: "Périodes d'essai",
+      icon: Clock,
     },
   ];
 
@@ -231,6 +238,8 @@ const menuItems = [
             onViewWalletDetails={handleViewWalletDetails}
           />
         );
+      case "trialPolicies":
+        return <TrialPolicies />;
       case "settings":
         return <Settings />;
       default:
@@ -258,7 +267,7 @@ const menuItems = [
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-3 px-2 py-2">
-              <img src={logo} alt="Logo" className="w-12 h-12" />
+              <img src={logo} alt="Logo" className="w-16 h-16 object-cover" />
               <div className="flex flex-col">
                 <span>Admin Dashboard</span>
                 <span className="text-xs text-muted-foreground">
