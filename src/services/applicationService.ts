@@ -20,6 +20,10 @@ export interface Application extends ApplicationPayload {
   status?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  hasTrialPolicy?: boolean;
+  trialPolicyEnabled?: boolean;
+  trialPeriodInDays?: number;
+  unlimitedAccess?: boolean;
 }
 
 export interface FeaturePayload {
@@ -57,6 +61,7 @@ export interface TrialPolicyPayload {
 export interface TrialPolicy {
   id: string;
   applicationId: string;
+  applicationName?: string;
   enabled: boolean;
   trialPeriodInDays: number;
   unlimitedAccess: boolean;
@@ -178,6 +183,11 @@ const normalizeApplication = (raw: Record<string, any>): Application => {
     status: raw.isActive === true ? "active" : (raw.isActive === false ? "inactive" : (raw.status ?? raw.state ?? null)),
     createdAt,
     updatedAt,
+    // Informations sur la période d'essai
+    hasTrialPolicy: raw.hasTrialPolicy ?? false,
+    trialPolicyEnabled: raw.trialPolicyEnabled ?? false,
+    trialPeriodInDays: raw.trialPeriodInDays ?? undefined,
+    unlimitedAccess: raw.unlimitedAccess ?? undefined,
   };
 };
 
@@ -350,6 +360,7 @@ export const applicationService = {
           content: responseData.map((item: any) => ({
             id: item.id,
             applicationId: item.applicationId,
+            applicationName: item.applicationName || undefined,
             enabled: item.enabled ?? true,
             trialPeriodInDays: item.trialPeriodInDays ?? 0,
             unlimitedAccess: item.unlimitedAccess ?? false,
@@ -374,6 +385,7 @@ export const applicationService = {
         content: content.map((item: any) => ({
           id: item.id,
           applicationId: item.applicationId,
+          applicationName: item.applicationName || undefined,
           enabled: item.enabled ?? true,
           trialPeriodInDays: item.trialPeriodInDays ?? 0,
           unlimitedAccess: item.unlimitedAccess ?? false,
@@ -391,7 +403,18 @@ export const applicationService = {
       };
     } catch (error) {
       console.error("[applicationService] Error fetching trial policies:", error);
-      throw error instanceof Error ? error : new Error("Impossible de récupérer les politiques d'essai");
+      console.warn("[applicationService] Falling back to bundled trial policy catalog");
+      return {
+        content: FALLBACK_TRIAL_POLICIES,
+        page: 0,
+        size: FALLBACK_TRIAL_POLICIES.length,
+        totalElements: FALLBACK_TRIAL_POLICIES.length,
+        totalPages: 1,
+        last: true,
+        first: true,
+        hasNext: false,
+        hasPrevious: false,
+      };
     }
   },
 
@@ -414,6 +437,7 @@ export const applicationService = {
         return {
           id: policyData.id,
           applicationId: policyData.applicationId || applicationId,
+          applicationName: policyData.applicationName || undefined,
           enabled: policyData.enabled ?? true,
           trialPeriodInDays: policyData.trialPeriodInDays ?? 0,
           unlimitedAccess: policyData.unlimitedAccess ?? false,
@@ -440,6 +464,7 @@ export const applicationService = {
           return {
             id: policy.id,
             applicationId: policy.applicationId || applicationId,
+            applicationName: policy.applicationName || undefined,
             enabled: policy.enabled ?? true,
             trialPeriodInDays: policy.trialPeriodInDays ?? 0,
             unlimitedAccess: policy.unlimitedAccess ?? false,
@@ -457,6 +482,7 @@ export const applicationService = {
         return {
           id: policyData.id,
           applicationId: policyData.applicationId || applicationId,
+          applicationName: policyData.applicationName || undefined,
           enabled: policyData.enabled ?? true,
           trialPeriodInDays: policyData.trialPeriodInDays ?? 0,
           unlimitedAccess: policyData.unlimitedAccess ?? false,
@@ -663,5 +689,58 @@ const FALLBACK_APPLICATIONS: Record<string, any>[] = [
     activeSubscriptionsCount: null,
     totalPlansCount: null,
     totalFeaturesCount: null,
+  },
+];
+
+const FALLBACK_TRIAL_POLICIES: TrialPolicy[] = [
+  {
+    id: "2098ea37-3581-4075-b038-ad8e137b2dc2",
+    applicationId: "ee7c282e-43e2-4783-a1c0-e4c9543bb2b9",
+    applicationName: "Asso Plus",
+    enabled: true,
+    trialPeriodInDays: 5,
+    unlimitedAccess: true,
+    createdAt: 1764075593.035351,
+    updatedAt: 1764075593.035351,
+  },
+  {
+    id: "7bf0b95a-9744-4e06-a2b7-77216e5ce15a",
+    applicationId: "28018466-b0e0-4284-88ae-1f23a080956c",
+    applicationName: "Crowdfunding",
+    enabled: true,
+    trialPeriodInDays: 90,
+    unlimitedAccess: true,
+    createdAt: 1764072774.467979,
+    updatedAt: 1764072774.467979,
+  },
+  {
+    id: "16ce966b-d029-461a-9ffd-642b00013e65",
+    applicationId: "60cfae3c-f71d-4420-82b4-dcf13e594d66",
+    applicationName: "Payment Gateway",
+    enabled: true,
+    trialPeriodInDays: 90,
+    unlimitedAccess: true,
+    createdAt: 1764069176.66149,
+    updatedAt: 1764069176.66149,
+  },
+  {
+    id: "67accc64-9def-4f7c-a957-82348f1a822c",
+    applicationId: "30464f2b-1c32-4262-927e-708d8cc6d41a",
+    applicationName: "appel2",
+    enabled: true,
+    trialPeriodInDays: 90,
+    unlimitedAccess: true,
+    createdAt: 1764069109.640175,
+    updatedAt: 1764069109.640175,
+  },
+  {
+    id: "ca41598f-2b4a-4be8-bc19-4662d1c5953b",
+    applicationId: "6bd2b34a-5be4-4c24-a395-ce92fe64836c",
+    applicationName: "Notification Service",
+    enabled: true,
+    trialPeriodInDays: 14,
+    unlimitedAccess: true,
+    createdAt: 1763461336.617582,
+    updatedAt: 1763461336.617582,
   },
 ];

@@ -1,6 +1,6 @@
 // src/pages/admin/Application.tsx
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Edit, Trash, Filter, Download, Search, Check } from "lucide-react";
+import { Plus, Edit, Trash, Filter, Download, Search, Check, Clock, Infinity } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -335,6 +335,7 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
                 <TableHead>Description</TableHead>
                 <TableHead>Type & Plateforme</TableHead>
                 <TableHead>Version</TableHead>
+                <TableHead>Période d'essai</TableHead>
                 <TableHead>Date de création</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -343,13 +344,13 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6 font-medium text-slate-500">
+                  <TableCell colSpan={7} className="text-center py-6 font-medium text-slate-500">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : currentItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6 font-medium text-slate-500">
+                  <TableCell colSpan={7} className="text-center py-6 font-medium text-slate-500">
                     Aucune application trouvée
                   </TableCell>
                 </TableRow>
@@ -375,6 +376,43 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
                       </div>
                     </TableCell>
                     <TableCell className="text-slate-600">{app.version || "—"}</TableCell>
+                    <TableCell>
+                      {app.hasTrialPolicy ? (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={`rounded-full px-3 py-1 text-xs font-semibold flex items-center gap-1.5 ${
+                                app.trialPolicyEnabled
+                                  ? "bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-2 border-green-300 shadow-sm"
+                                  : "bg-gray-100 text-gray-600 border-gray-300"
+                              }`}
+                            >
+                              <div className={`h-2 w-2 rounded-full ${app.trialPolicyEnabled ? "bg-green-500 animate-pulse" : "bg-gray-400"}`}></div>
+                              {app.trialPolicyEnabled ? "Actif" : "Inactif"}
+                            </Badge>
+                          </div>
+                          {app.trialPeriodInDays && (
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 w-fit">
+                              <Clock className="h-3.5 w-3.5 text-blue-600" />
+                              <span className="text-xs font-semibold text-slate-700">
+                                {app.trialPeriodInDays} jour{app.trialPeriodInDays > 1 ? "s" : ""}
+                              </span>
+                            </div>
+                          )}
+                          {app.unlimitedAccess && (
+                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 w-fit">
+                              <Infinity className="h-3 w-3 text-amber-600" />
+                              <span className="text-xs font-semibold text-amber-700">Accès illimité</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge variant="outline" className="rounded-full px-3 py-1 text-xs bg-slate-50 text-slate-500 border-slate-200 font-medium">
+                          Aucune période
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-slate-600">{formatDate(app.createdAt)}</TableCell>
                     <TableCell className="text-right space-x-2">
                       <Badge

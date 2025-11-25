@@ -48,7 +48,7 @@ import { Payment, PaymentMethod, Wallet } from "./Payment";
 import { PaymentMethodDetails } from "./PaymentMethodDetails";
 import { WalletDetails } from "./WalletDetails";
 import { TrialPolicies } from "./TrialPolicies";
-import logo from "@/assets/64732130af5e1351819c7a94a0f8563f43705c92.png";
+import logo from "@/assets/1200x630wa-removebg-preview.png";
 import type { Application as ApiApplication } from "../services/applicationService";
 import { PAGE_LABELS } from "../utils/apiEndpoints";
 
@@ -266,10 +266,10 @@ const menuItems = [
       <div className="flex min-h-screen w-full">
         <Sidebar>
           <SidebarHeader>
-            <div className="flex items-center gap-3 px-2 py-2">
-              <img src={logo} alt="Logo" className="w-16 h-16 object-cover" />
+            <div className="flex items-center gap-4 px-2 py-3">
+              <img src={logo} alt="Logo" className="w-16 h-16 object-contain" />
               <div className="flex flex-col">
-                <span>Admin Dashboard</span>
+                <span className="text-lg font-semibold">Admin Dashboard</span>
                 <span className="text-xs text-muted-foreground">
                   Panel de contrôle
                 </span>

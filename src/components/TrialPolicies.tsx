@@ -19,7 +19,6 @@ import {
 } from "./ui/alert-dialog";
 import { applicationService, TrialPolicy } from "../services/applicationService";
 import { RefreshCw, Save, Trash2 } from "lucide-react";
-import type { Application } from "./ApplicationDetails";
 
 interface TrialPolicyWithApplication extends TrialPolicy {
   applicationName?: string;
@@ -28,7 +27,6 @@ interface TrialPolicyWithApplication extends TrialPolicy {
 export function TrialPolicies() {
   const [policies, setPolicies] = useState<TrialPolicyWithApplication[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [applications, setApplications] = useState<Record<string, Application>>({});
   const [updatingPolicies, setUpdatingPolicies] = useState<Record<string, boolean>>({});
   const [editForms, setEditForms] = useState<Record<string, {
     trialPeriodInDays: number;
@@ -41,40 +39,15 @@ export function TrialPolicies() {
   const [deletingPolicyId, setDeletingPolicyId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const loadApplications = useCallback(async () => {
-    try {
-      const apps = await applicationService.getAllApplications();
-      const appMap: Record<string, Application> = {};
-      apps.forEach((app) => {
-        appMap[app.id] = {
-          id: app.id,
-          name: app.name,
-          category: app.type || "Application",
-          version: app.version || "1.0.0",
-          status: (app.status?.toLowerCase() as "active" | "inactive" | "maintenance") || "active",
-          subscriptions: 0,
-          lastUpdate: app.updatedAt || app.createdAt || new Date().toISOString(),
-          description: app.description || "",
-          plans: [],
-          features: [],
-        };
-      });
-      setApplications(appMap);
-    } catch (error: any) {
-      console.error("[TrialPolicies] Error loading applications:", error);
-      toast.error("Impossible de charger les applications");
-    }
-  }, []);
-
   const loadTrialPolicies = useCallback(async (pageNum: number = 0) => {
     setIsLoading(true);
     try {
       const result = await applicationService.getAllTrialPolicies(pageNum, 10);
       
-      // Enrichir avec les noms d'applications
+      // Utiliser directement applicationName de l'API, ou applicationId comme fallback
       const enrichedPolicies: TrialPolicyWithApplication[] = result.content.map((policy) => ({
         ...policy,
-        applicationName: applications[policy.applicationId]?.name || policy.applicationId,
+        applicationName: policy.applicationName || policy.applicationId,
       }));
       
       setPolicies(enrichedPolicies);
@@ -102,17 +75,11 @@ export function TrialPolicies() {
     } finally {
       setIsLoading(false);
     }
-  }, [applications]);
+  }, []);
 
   useEffect(() => {
-    loadApplications();
-  }, [loadApplications]);
-
-  useEffect(() => {
-    if (Object.keys(applications).length > 0) {
-      loadTrialPolicies(page);
-    }
-  }, [applications, page, loadTrialPolicies]);
+    loadTrialPolicies(page);
+  }, [page, loadTrialPolicies]);
 
   const handleUpdatePolicy = async (policy: TrialPolicyWithApplication) => {
     const form = editForms[policy.id];

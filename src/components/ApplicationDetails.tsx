@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { ArrowLeft, Plus, Edit, Trash2, Check, X, Tag } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, Check, X, Tag, Calendar, Percent, TrendingUp, User, Ticket, RefreshCw, Info, Clock, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { applicationService, FeaturePayload, PlanPayload, TrialPolicyPayload, TrialPolicy } from "../services/applicationService";
 import { promotionService, PromotionPayload, Promotion } from "../services/promotionService";
@@ -922,83 +922,216 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Période d'essai</CardTitle>
-              <CardDescription>
-                Configurez la période d'essai pour cette application
-              </CardDescription>
+          <Card className="border-2 border-[#8b68a6]/20 shadow-lg overflow-hidden relative">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#8b68a6] to-[#6b4685]"></div>
+            <CardHeader className="bg-gradient-to-r from-[#8b68a6]/5 to-purple-50/30 border-b border-[#8b68a6]/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg ring-2 ring-blue-200/50">
+                  <Clock className="h-6 w-6 text-black drop-shadow-sm" />
+                </div>
+                <div>
+                  <CardTitle className="text-gray-900">Période d'essai</CardTitle>
+                  <CardDescription className="text-gray-600">
+                    Configurez la période d'essai pour cette application
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6 p-6">
               {isLoadingTrialPolicy ? (
                 <div className="text-center py-8 text-muted-foreground">
                   Chargement de la politique d'essai...
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center justify-between space-x-2">
-                    <div className="flex-1 space-y-0.5">
-                      <Label htmlFor="trial-enabled">Activer la période d'essai</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Active ou désactive la période d'essai pour cette application
+                  <div className="rounded-xl border-2 border-gray-200 bg-gradient-to-br from-gray-50/50 to-white p-6 space-y-5 shadow-inner">
+                    <div className="flex items-center justify-between space-x-4 p-4 rounded-xl bg-gradient-to-r from-white to-blue-50/30 border-2 border-blue-100 shadow-md hover:shadow-lg transition-shadow duration-200">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg ring-2 ring-emerald-200/50 flex-shrink-0">
+                          <Check className="h-6 w-6 text-emerald-900 drop-shadow-sm" />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <Label htmlFor="trial-enabled" className="text-base font-bold text-gray-900 cursor-pointer">
+                            Activer la période d'essai
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            Active ou désactive la période d'essai pour cette application
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        id="trial-enabled"
+                        checked={trialPolicyForm.enabled}
+                        onCheckedChange={(checked: boolean) =>
+                          setTrialPolicyForm({ ...trialPolicyForm, enabled: checked })
+                        }
+                        className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-gray-300"
+                      />
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-white to-purple-50/30 border-2 border-purple-100 shadow-md hover:shadow-lg transition-shadow duration-200">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md ring-2 ring-purple-200/50 flex-shrink-0">
+                          <CalendarDays className="h-5 w-5 text-purple-900 drop-shadow-sm" />
+                        </div>
+                        <Label htmlFor="trial-period" className="text-base font-bold text-gray-900 cursor-pointer">
+                          Durée de la période d'essai
+                        </Label>
+                      </div>
+                      <Input
+                        id="trial-period"
+                        type="number"
+                        min={1}
+                        value={trialPolicyForm.trialPeriodInDays}
+                        onChange={(e) =>
+                          setTrialPolicyForm({
+                            ...trialPolicyForm,
+                            trialPeriodInDays: parseInt(e.target.value) || 1,
+                          })
+                        }
+                        disabled={!trialPolicyForm.enabled}
+                        className="text-lg font-bold h-14 border-2 border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-300/50 bg-white shadow-sm"
+                        placeholder="90"
+                      />
+                      <p className="text-xs text-muted-foreground mt-3 flex items-center gap-2 p-2 rounded-lg bg-blue-50/50 border border-blue-100">
+                        <Info className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        <span>Nombre de jours pendant lesquels l'application sera disponible en période d'essai</span>
                       </p>
                     </div>
-                    <Switch
-                      id="trial-enabled"
-                      checked={trialPolicyForm.enabled}
-                      onCheckedChange={(checked) =>
-                        setTrialPolicyForm({ ...trialPolicyForm, enabled: checked })
-                      }
-                    />
-                  </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="trial-period">Durée de la période d'essai (jours)</Label>
-                    <Input
-                      id="trial-period"
-                      type="number"
-                      min={1}
-                      value={trialPolicyForm.trialPeriodInDays}
-                      onChange={(e) =>
-                        setTrialPolicyForm({
-                          ...trialPolicyForm,
-                          trialPeriodInDays: parseInt(e.target.value) || 1,
-                        })
-                      }
-                      disabled={!trialPolicyForm.enabled}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Nombre de jours pendant lesquels l'application sera disponible en période d'essai
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between space-x-2">
-                    <div className="flex-1 space-y-0.5">
-                      <Label htmlFor="trial-unlimited">Accès illimité</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Permet un accès illimité pendant la période d'essai
-                      </p>
+                    <div className="flex items-center justify-between space-x-4 p-4 rounded-xl bg-gradient-to-r from-white to-orange-50/30 border-2 border-orange-100 shadow-md hover:shadow-lg transition-shadow duration-200">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg ring-2 ring-orange-200/50 flex-shrink-0">
+                          <TrendingUp className="h-6 w-6 text-orange-900 drop-shadow-sm" />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <Label htmlFor="trial-unlimited" className="text-base font-bold text-gray-900 cursor-pointer">
+                            Accès illimité
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            Permet un accès illimité pendant la période d'essai
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        id="trial-unlimited"
+                        checked={trialPolicyForm.unlimitedAccess}
+                        onCheckedChange={(checked: boolean) =>
+                          setTrialPolicyForm({ ...trialPolicyForm, unlimitedAccess: checked })
+                        }
+                        disabled={!trialPolicyForm.enabled}
+                        className="data-[state=checked]:bg-orange-500 data-[state=unchecked]:bg-gray-300"
+                      />
                     </div>
-                    <Switch
-                      id="trial-unlimited"
-                      checked={trialPolicyForm.unlimitedAccess}
-                      onCheckedChange={(checked) =>
-                        setTrialPolicyForm({ ...trialPolicyForm, unlimitedAccess: checked })
-                      }
-                      disabled={!trialPolicyForm.enabled}
-                    />
                   </div>
 
                   {trialPolicy && (
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1">
-                      <div className="text-sm font-medium text-gray-900">Informations actuelles</div>
-                      <div className="text-xs text-muted-foreground">
-                        Créée le: {trialPolicy.createdAt 
-                          ? new Date(trialPolicy.createdAt < 1e12 ? trialPolicy.createdAt * 1000 : trialPolicy.createdAt).toLocaleDateString("fr-FR")
-                          : "—"}
-                        {trialPolicy.updatedAt && trialPolicy.updatedAt !== trialPolicy.createdAt && (
-                          <> • Modifiée le: {new Date(trialPolicy.updatedAt < 1e12 ? trialPolicy.updatedAt * 1000 : trialPolicy.updatedAt).toLocaleDateString("fr-FR")}</>
-                        )}
+                    <div className="relative rounded-xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/30 p-6 shadow-lg overflow-hidden">
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+                      <div className="flex items-start gap-4">
+                        <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-xl ring-4 ring-indigo-100/50">
+                          <Info className="h-7 w-7 text-indigo-900 drop-shadow-md" />
+                        </div>
+                        <div className="flex-1 space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="text-lg font-bold text-gray-900">Informations actuelles</h4>
+                            <Badge variant="secondary" className="bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-2 border-green-300 px-3 py-1 font-semibold">
+                              <div className="h-2 w-2 rounded-full bg-green-500 mr-2 animate-pulse"></div>
+                              Actif
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="group flex items-start gap-4 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md hover:shadow-xl hover:border-blue-300 transition-all duration-200">
+                              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg ring-2 ring-blue-200/50 group-hover:scale-110 transition-transform duration-200">
+                                <CalendarDays className="h-6 w-6 text-blue-900 drop-shadow-sm" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-blue-700 mb-1.5 uppercase tracking-wide">Créée le</div>
+                                <div className="font-bold text-base text-gray-900 mb-1">
+                                  {trialPolicy.createdAt 
+                                    ? new Date(trialPolicy.createdAt < 1e12 ? trialPolicy.createdAt * 1000 : trialPolicy.createdAt).toLocaleDateString("fr-FR", {
+                                        day: "numeric",
+                                        month: "long",
+                                        year: "numeric"
+                                      })
+                                    : "—"}
+                                </div>
+                                {trialPolicy.createdAt && (
+                                  <div className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-100/50 px-2 py-1 rounded-md w-fit">
+                                    <Clock className="h-3 w-3" />
+                                    {new Date(trialPolicy.createdAt < 1e12 ? trialPolicy.createdAt * 1000 : trialPolicy.createdAt).toLocaleTimeString("fr-FR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit"
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {trialPolicy.updatedAt && trialPolicy.updatedAt !== trialPolicy.createdAt && (
+                              <div className="group flex items-start gap-4 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 shadow-md hover:shadow-xl hover:border-emerald-300 transition-all duration-200">
+                                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0 shadow-lg ring-2 ring-emerald-200/50 group-hover:scale-110 transition-transform duration-200">
+                                  <Clock className="h-6 w-6 text-emerald-900 drop-shadow-sm" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-semibold text-emerald-700 mb-1.5 uppercase tracking-wide">Modifiée le</div>
+                                  <div className="font-bold text-base text-gray-900 mb-1">
+                                    {new Date(trialPolicy.updatedAt < 1e12 ? trialPolicy.updatedAt * 1000 : trialPolicy.updatedAt).toLocaleDateString("fr-FR", {
+                                      day: "numeric",
+                                      month: "long",
+                                      year: "numeric"
+                                    })}
+                                  </div>
+                                  <div className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-100/50 px-2 py-1 rounded-md w-fit">
+                                    <Clock className="h-3 w-3" />
+                                    {new Date(trialPolicy.updatedAt < 1e12 ? trialPolicy.updatedAt * 1000 : trialPolicy.updatedAt).toLocaleTimeString("fr-FR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit"
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <div className="group flex items-start gap-4 p-4 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 shadow-md hover:shadow-xl hover:border-purple-300 transition-all duration-200">
+                              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-lg ring-2 ring-purple-200/50 group-hover:scale-110 transition-transform duration-200">
+                                <Calendar className="h-6 w-6 text-purple-900 drop-shadow-sm" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-purple-700 mb-1.5 uppercase tracking-wide">Période d'essai</div>
+                                <div className="font-bold text-base text-gray-900 mb-1">
+                                  {trialPolicy.trialPeriodInDays} jour{trialPolicy.trialPeriodInDays > 1 ? "s" : ""}
+                                </div>
+                                {trialPolicy.createdAt && (
+                                  <div className="text-xs font-medium text-purple-600 bg-purple-100/50 px-2 py-1 rounded-md w-fit">
+                                    Expire le: {(() => {
+                                      const startDate = new Date(trialPolicy.createdAt < 1e12 ? trialPolicy.createdAt * 1000 : trialPolicy.createdAt);
+                                      const endDate = new Date(startDate);
+                                      endDate.setDate(endDate.getDate() + trialPolicy.trialPeriodInDays);
+                                      return endDate.toLocaleDateString("fr-FR", {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric"
+                                      });
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="group flex items-start gap-4 p-4 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200 shadow-md hover:shadow-xl hover:border-orange-300 transition-all duration-200">
+                              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center flex-shrink-0 shadow-lg ring-2 ring-orange-200/50 group-hover:scale-110 transition-transform duration-200">
+                                <TrendingUp className="h-6 w-6 text-orange-900 drop-shadow-sm" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-orange-700 mb-1.5 uppercase tracking-wide">Accès</div>
+                                <div className="font-bold text-base text-gray-900 mb-1">
+                                  {trialPolicy.unlimitedAccess ? "Illimité" : "Limité"}
+                                </div>
+                                <div className="text-xs font-medium text-orange-600 bg-orange-100/50 px-2 py-1 rounded-md w-fit">
+                                  Statut: {trialPolicy.enabled ? "Activé" : "Désactivé"}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1045,32 +1178,45 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                   Aucune fonctionnalité ajoutée
                 </div>
               ) : (
-                <div className="rounded-lg border border-gray-200 overflow-hidden bg-white">
+                <div className="rounded-xl border-2 border-gray-200 overflow-hidden bg-white shadow-sm">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-gray-50">
-                      <TableRow className="hover:bg-gray-50 border-b border-gray-200">
-                        <TableHead className="text-gray-700">Nom</TableHead>
-                        <TableHead className="text-gray-700">Description</TableHead>
-                        <TableHead className="text-gray-700">Clé</TableHead>
-                        <TableHead className="text-right text-gray-700">Actions</TableHead>
+                    <TableHeader className="bg-gradient-to-r from-gray-50 to-gray-100/50 sticky top-0 z-10">
+                      <TableRow className="border-b-2 border-gray-300 hover:bg-transparent">
+                        <TableHead className="text-gray-800 font-bold text-sm py-4">Nom</TableHead>
+                        <TableHead className="text-gray-800 font-bold text-sm py-4">Description</TableHead>
+                        <TableHead className="text-gray-800 font-bold text-sm py-4">Clé</TableHead>
+                        <TableHead className="text-right text-gray-800 font-bold text-sm py-4">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {localApp.features.map((feature) => (
-                        <TableRow key={feature.id} className="hover:bg-gray-50 border-b border-gray-100">
-                          <TableCell className="text-gray-900">{feature.name}</TableCell>
-                          <TableCell className="text-gray-600">{feature.description}</TableCell>
-                          <TableCell>
-                            <code className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                      {localApp.features.map((feature, index) => (
+                        <TableRow 
+                          key={feature.id} 
+                          className={`border-b border-gray-100 transition-colors duration-150 ${
+                            index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                          } hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-transparent hover:shadow-sm`}
+                        >
+                          <TableCell className="py-4">
+                            <div className="font-semibold text-gray-900">{feature.name}</div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <div className="text-gray-600 text-sm max-w-md truncate" title={feature.description}>
+                              {feature.description || "—"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <code className="inline-flex items-center text-xs bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 px-3 py-1.5 rounded-lg border border-gray-300 font-mono font-semibold shadow-sm">
                               {feature.key}
                             </code>
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right py-4">
                             <div className="flex justify-end gap-2">
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => openEditFeatureDialog(feature)}
+                                className="h-8 w-8 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                title="Modifier"
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
@@ -1078,8 +1224,10 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => openDeleteFeatureDialog(feature)}
+                                className="h-8 w-8 hover:bg-red-100 hover:text-red-700 transition-colors"
+                                title="Supprimer"
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
@@ -1216,64 +1364,186 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                             )}
                           </div>
                           <div>
-                            <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                              <Tag className="h-4 w-4" />
-                              <span>Promotions liées</span>
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-2">
+                                <Tag className="h-5 w-5 text-[#8b68a6]" />
+                                <span className="font-semibold text-gray-900">Promotions liées</span>
+                                {planPromotions.length > 0 && (
+                                  <Badge variant="secondary" className="ml-2">
+                                    {planPromotions.length}
+                                  </Badge>
+                                )}
+                              </div>
                               {isLoadingPromotions && (
-                                <span className="text-xs text-muted-foreground">Chargement...</span>
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <RefreshCw className="h-3 w-3 animate-spin" />
+                                  Chargement...
+                                </span>
                               )}
                             </div>
                             {planPromotions.length === 0 ? (
-                              <div className="text-sm text-muted-foreground">
-                                Aucune promotion pour ce plan
+                              <div className="text-center py-8 px-4 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50">
+                                <Ticket className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                                <p className="text-sm font-medium text-gray-900 mb-1">
+                                  Aucune promotion pour ce plan
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Cliquez sur l'icône <Tag className="h-3 w-3 inline" /> pour créer une promotion
+                                </p>
                               </div>
                             ) : (
-                              <div className="space-y-3">
-                                {planPromotions.map((promo) => (
-                                  <div
-                                    key={promo.id}
-                                    className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <div className="font-semibold text-gray-900">{promo.code}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {formatPromotionDate(promo.startDate)} →{" "}
-                                          {formatPromotionDate(promo.endDate)}
+                              <div className="grid grid-cols-1 gap-4">
+                                {planPromotions.map((promo) => {
+                                  const isActive = formatPromotionStatus(promo).toUpperCase() === "ACTIVE";
+                                  // Vérifier si la promotion est expirée en utilisant la même logique que formatPromotionDate
+                                  let isExpired = false;
+                                  if (promo.endDate) {
+                                    let endDate: Date | null = null;
+                                    if (Array.isArray(promo.endDate) && promo.endDate.length >= 3) {
+                                      endDate = new Date(Number(promo.endDate[0]), Number(promo.endDate[1]) - 1, Number(promo.endDate[2]));
+                                    } else if (typeof promo.endDate === "number") {
+                                      endDate = new Date(promo.endDate < 1e12 ? promo.endDate * 1000 : promo.endDate);
+                                    } else if (typeof promo.endDate === "string" && promo.endDate) {
+                                      const parsedDate = new Date(promo.endDate);
+                                      if (!Number.isNaN(parsedDate.getTime())) {
+                                        endDate = parsedDate;
+                                      }
+                                    }
+                                    if (endDate && !isNaN(endDate.getTime())) {
+                                      isExpired = endDate < new Date();
+                                    }
+                                  }
+                                  const statusColor = isActive && !isExpired 
+                                    ? "bg-green-100 text-green-800 border-green-200" 
+                                    : "bg-gray-100 text-gray-600 border-gray-200";
+                                  
+                                  return (
+                                    <div
+                                      key={promo.id}
+                                      className="group relative rounded-xl border-2 border-gray-200 bg-gradient-to-br from-white to-gray-50/50 p-4 shadow-sm hover:shadow-md transition-all duration-200 hover:border-[#8b68a6]/30"
+                                    >
+                                      {/* Header avec code et statut */}
+                                      <div className="flex items-start justify-between mb-4">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-[#8b68a6] to-[#6b4685] flex items-center justify-center shadow-sm">
+                                              <Ticket className="h-5 w-5 text-white" />
+                                            </div>
+                                            <div>
+                                              <div className="font-bold text-lg text-gray-900 tracking-wide">
+                                                {promo.code}
+                                              </div>
+                                              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                                <Calendar className="h-3 w-3" />
+                                                <span>
+                                                  {formatPromotionDate(promo.startDate)} →{" "}
+                                                  {formatPromotionDate(promo.endDate)}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <Badge 
+                                          className={`text-xs font-semibold px-3 py-1 ${statusColor} border`}
+                                        >
+                                          {formatPromotionStatus(promo)}
+                                        </Badge>
+                                      </div>
+
+                                      {/* Informations principales */}
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                        <div className="flex items-start gap-2">
+                                          <div className="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                            <Percent className="h-4 w-4 text-purple-600" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-xs text-muted-foreground mb-0.5">
+                                              Réduction
+                                            </div>
+                                            <div className="font-bold text-base text-gray-900">
+                                              {formatPercentage(promo.discountPercentage)}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-2">
+                                          <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                            <TrendingUp className="h-4 w-4 text-blue-600" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-xs text-muted-foreground mb-0.5">
+                                              Montant min.
+                                            </div>
+                                            <div className="font-semibold text-sm text-gray-900 truncate">
+                                              {formatMoney(promo.minPurchaseAmount, plan.currency || "XAF")}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-2">
+                                          <div className="h-8 w-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                                            <Check className="h-4 w-4 text-orange-600" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-xs text-muted-foreground mb-0.5">
+                                              Utilisations
+                                            </div>
+                                            <div className="font-semibold text-sm text-gray-900">
+                                              {promo.currentUsage ?? 0} / {(promo.maxUsage ?? 0) || "∞"}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-2">
+                                          <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                                            <User className="h-4 w-4 text-green-600" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-xs text-muted-foreground mb-0.5">
+                                              Créée par
+                                            </div>
+                                            <div className="font-semibold text-xs text-gray-900 truncate">
+                                              {promo.createdBy ? (
+                                                <span className="inline-block max-w-full truncate" title={promo.createdBy}>
+                                                  {promo.createdBy.slice(0, 20)}
+                                                  {promo.createdBy.length > 20 ? "..." : ""}
+                                                </span>
+                                              ) : (
+                                                "—"
+                                              )}
+                                            </div>
+                                          </div>
                                         </div>
                                       </div>
-                                      <Badge variant="outline" className="text-xs">
-                                        {formatPromotionStatus(promo)}
-                                      </Badge>
+
+                                      {/* Barre de progression pour le quota */}
+                                      {promo.maxUsage && promo.maxUsage > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-gray-200">
+                                          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                                            <span>Progression du quota</span>
+                                            <span>
+                                              {Math.round(
+                                                ((promo.currentUsage ?? 0) / promo.maxUsage) * 100
+                                              )}
+                                              %
+                                            </span>
+                                          </div>
+                                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                            <div
+                                              className="h-full bg-gradient-to-r from-[#8b68a6] to-[#6b4685] rounded-full transition-all duration-300"
+                                              style={{
+                                                width: `${Math.min(
+                                                  ((promo.currentUsage ?? 0) / promo.maxUsage) * 100,
+                                                  100
+                                                )}%`,
+                                              }}
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                      <div>
-                                        <div className="text-muted-foreground">Réduction</div>
-                                        <div className="font-medium text-gray-900">
-                                          {formatPercentage(promo.discountPercentage)}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="text-muted-foreground">Montant min.</div>
-                                        <div className="font-medium text-gray-900">
-                                          {formatMoney(promo.minPurchaseAmount, plan.currency || "XAF")}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="text-muted-foreground">Quota</div>
-                                        <div className="font-medium text-gray-900">
-                                          {promo.currentUsage ?? 0} / {promo.maxUsage ?? 0}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="text-muted-foreground">Auteur</div>
-                                        <div className="font-medium text-gray-900 text-xs break-all">
-                                          {promo.createdBy || "—"}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
