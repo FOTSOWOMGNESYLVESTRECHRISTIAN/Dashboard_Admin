@@ -56,7 +56,9 @@ const statusColorMap: Record<string, string> = {
   maintenance: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
-const statusLabelsMap = {
+type StatusFilterType = "all" | "active" | "inactive" | "maintenance";
+
+const statusLabelsMap: Record<StatusFilterType, string> = {
   all: "Toutes",
   active: "Actives",
   inactive: "Inactives",
@@ -90,8 +92,7 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
   // Form
   const [formData, setFormData] = useState<ApplicationPayload>(buildEmptyForm());
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<"all" | "active" | "inactive" | "maintenance">("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterType>("all");
   const [isExporting, setIsExporting] = useState(false);
 
   // ------------------------------
@@ -241,22 +242,22 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
   }, [currentPage, totalPages]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-3">
       <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 text-black p-6 flex flex-col gap-4 shadow-[0_25px_70px_rgba(5,10,30,0.35)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="uppercase tracking-[0.35em] text-xs text-black">Applications</p>
-            <h1 className="text-3xl font-semibold">Centre de gestion</h1>
-            <p className="text-white/70 text-sm max-w-2xl mt-1">
+            <p className="uppercase tracking-[0.35em] text-3xl text-black font-semibold">Applications</p>
+            <h1 className="text-xl">Centre de gestion</h1>
+            <p className="text-white/70 text-base max-w-2xl mt-1">
               Administrez vos apps, ajoutez des fonctionnalités et publiez des plans avec un style distinct.
             </p>
           </div>
-        <div className="flex flex-wrap items-center gap-3">
+        {/* <div className="flex flex-wrap items-center gap-3">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="rounded-full border-white/40 text-white hover:bg-white/10"
+                className="rounded-full border-white/40 text-black hover:bg-white/10"
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filtres
@@ -283,14 +284,14 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
           </DropdownMenu>
           <Button
             variant="outline"
-            className="rounded-full border-white/40 text-white hover:bg-white/10"
+            className="rounded-full border-white/40 text-black hover:bg-white/10"
             onClick={handleExportToExcel}
             disabled={isExporting}
           >
             <Download className="w-4 h-4 mr-2" />
             {isExporting ? "Export..." : "Exporter"}
           </Button>
-        </div>
+        </div> */}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -305,52 +306,98 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
       </div>
 
       <div className="rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.08)] overflow-hidden">
-        <div className="px-8 py-4 border-t border-slate-100 flex flex-wrap items-center gap-4 justify-between">
-          <div className="relative flex-1 min-w-[240px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Rechercher une application..."
-              className="pl-10 rounded-full bg-slate-50 border-slate-200"
-            />
-          </div>
-          {statusFilter !== "all" && (
-            <Badge className="rounded-full bg-slate-900 text-white px-4 py-2">
-              Filtre: {statusLabelsMap[statusFilter as keyof typeof statusLabelsMap] || statusFilter}
-              <button
-                className="ml-2 text-xs uppercase tracking-wide"
-                onClick={() => setStatusFilter("all")}
+        <div className="px-6 py-1.5 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-4 justify-between">
+            <div className="relative flex-1 min-w-[240px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Rechercher une application..."
+                className="pl-10 rounded-full bg-slate-50 border-slate-200"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="rounded-full border-white/40 text-black hover:bg-white/10"
+                  >
+                    <Filter className="w-4 h-4 mr-2" />
+                    Filtres
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {[
+                    { value: "all", label: "Tous" },
+                    { value: "active", label: "Actives" },
+                    { value: "inactive", label: "Inactives" },
+                    { value: "maintenance", label: "Maintenance" },
+                  ].map((option) => (
+                    <DropdownMenuItem
+                      key={option.value}
+                      onClick={() => setStatusFilter(option.value as StatusFilterType)}
+                    >
+                      {statusFilter === option.value && (
+                        <Check className="mr-2 h-4 w-4 text-emerald-600" />
+                      )}
+                      {option.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="outline"
+                className="rounded-full border-white/40 text-black hover:bg-white/10"
+                onClick={handleExportToExcel}
+                disabled={isExporting}
               >
-                Réinitialiser
-              </button>
-            </Badge>
-          )}
+                <Download className="w-4 h-4 mr-2" />
+                {isExporting ? "Export..." : "Exporter"}
+              </Button>
+            </div>
+          </div>
+          <div className="h-8 flex items-center">
+            {statusFilter !== "all" && (
+              <Badge className="rounded-full bg-slate-900 text-white px-4 py-2">
+                Filtre: {statusLabelsMap[statusFilter]}
+                <button
+                  className="ml-2 text-xs uppercase tracking-wide"
+                  onClick={() => setStatusFilter("all")}
+                >
+                  Réinitialiser
+                </button>
+              </Badge>
+            )}
+            {statusFilter === "all" && <div className="h-8"></div>}
+          </div>
         </div>
+        
         <div className="px-2 pb-2">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Type & Plateforme</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Période d'essai</TableHead>
-                <TableHead>Date de création</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+          <Table className="border border-slate-200 rounded-lg overflow-hidden">
+            <TableHeader className="bg-slate-50">
+              <TableRow className="hover:bg-slate-50">
+                <TableHead className="font-semibold text-slate-700 bg-slate-50 first:rounded-tl-lg last:rounded-tr-lg">Nom</TableHead>
+                <TableHead className="font-semibold text-slate-700 bg-slate-50">Description</TableHead>
+                <TableHead className="font-semibold text-slate-700 bg-slate-50">Type & Plateforme</TableHead>
+                <TableHead className="font-semibold text-slate-700 bg-slate-50">Version</TableHead>
+                <TableHead className="font-semibold text-slate-700 bg-slate-50">Période d'essai</TableHead>
+                <TableHead className="font-semibold text-slate-700 bg-slate-50">Date de création</TableHead>
+                <TableHead className="font-semibold text-slate-700 bg-slate-50 text-right last:rounded-tr-lg">Actions</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6 font-medium text-slate-500">
+                  <TableCell colSpan={7} className="text-center py-6 font-medium text-slate-500 rounded-b-lg">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : currentItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6 font-medium text-slate-500">
+                  <TableCell colSpan={7} className="text-center py-6 font-medium text-slate-500 rounded-b-lg">
                     Aucune application trouvée
                   </TableCell>
                 </TableRow>
@@ -384,16 +431,17 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
                               variant="outline"
                               className={`rounded-full px-3 py-1 text-xs font-semibold flex items-center gap-1.5 ${
                                 app.trialPolicyEnabled
-                                  ? "bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-2 border-green-300 shadow-sm"
-                                  : "bg-gray-100 text-gray-600 border-gray-300"
+                                  ? "bg-green-100 text-green-800 border-2 border-green-400 shadow-sm"
+                                  : "bg-gray-100 text-gray-600 border border-gray-300"
                               }`}
                             >
-                              <div className={`h-2 w-2 rounded-full ${app.trialPolicyEnabled ? "bg-green-500 animate-pulse" : "bg-gray-400"}`}></div>
+                              <div className={`h-2 w-2 rounded-full ${app.trialPolicyEnabled ? "bg-green-600 animate-pulse" : "bg-gray-400"}`}></div>
                               {app.trialPolicyEnabled ? "Actif" : "Inactif"}
                             </Badge>
                           </div>
+
                           {app.trialPeriodInDays && (
-                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 w-fit">
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-blue-100 border border-blue-200 w-fit">
                               <Clock className="h-3.5 w-3.5 text-blue-600" />
                               <span className="text-xs font-semibold text-slate-700">
                                 {app.trialPeriodInDays} jour{app.trialPeriodInDays > 1 ? "s" : ""}
@@ -401,14 +449,15 @@ export function Applications({ onViewDetails }: ApplicationsProps) {
                             </div>
                           )}
                           {app.unlimitedAccess && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 w-fit">
-                              <Infinity className="h-3 w-3 text-amber-600" />
-                              <span className="text-xs font-semibold text-amber-700">Accès illimité</span>
+                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-orange-100 border border-orange-300 w-fit">
+                              <Infinity className="h-3 w-3 text-orange-600" />
+                              <span className="text-xs font-semibold text-orange-700">Accès illimité</span>
                             </div>
+                          
                           )}
                         </div>
                       ) : (
-                        <Badge variant="outline" className="rounded-full px-3 py-1 text-xs bg-slate-50 text-slate-500 border-slate-200 font-medium">
+                        <Badge variant="outline" className="rounded-full px-3 py-1 text-xs bg-purple-100 text-slate-500 border-purple-200 font-medium">
                           Aucune période
                         </Badge>
                       )}

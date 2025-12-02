@@ -1,184 +1,231 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+// src/components/PaymentMethodDetails.tsx
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Tabs, TabsContent } from "./ui/tabs";
+import { ArrowLeft, Check, Loader2, X, AlertCircle } from "lucide-react";
 import { Badge } from "./ui/badge";
-import { Separator } from "./ui/separator";
+import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
-import { ArrowLeft, CreditCard, CheckCircle, XCircle, Clock, DollarSign, Coins } from "lucide-react";
-import { PaymentMethod } from "./Payment";
+import { PaymentMethod } from "../types/payment";
+import { updatePaymentMethodStatus, formatDate } from "../services/paymentService";
+import { toast } from "sonner";
 
 interface PaymentMethodDetailsProps {
-  paymentMethod: PaymentMethod;
+  method: PaymentMethod;
   onBack: () => void;
 }
 
-const statusColors = {
-  active: "bg-green-600",
-  inactive: "bg-gray-400",
-  pending: "bg-amber-500",
-};
+export function PaymentMethodDetails({ method: initialMethod, onBack }: PaymentMethodDetailsProps) {
+  const [method, setMethod] = useState(initialMethod);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-const statusLabels = {
-  active: "Actif",
-  inactive: "Inactif",
-  pending: "En attente",
-};
-
-const typeLabels = {
-  card: "Carte",
-  bank: "Banque",
-  paypal: "PayPal",
-  crypto: "Crypto",
-  other: "Autre",
-};
-
-export function PaymentMethodDetails({
-  paymentMethod,
-  onBack,
-}: PaymentMethodDetailsProps) {
-  const formatPrice = (price: number, currency: string) => {
-    return `${price.toFixed(2)} ${currency}`;
+  const handleStatusChange = async (newStatus: boolean) => {
+    if (!method) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Appel au service pour mettre à jour le statut
+      const updatedMethod = await updatePaymentMethodStatus(method.id, newStatus);
+      
+      // Mettre à jour l'état local avec la méthode mise à jour
+      setMethod(updatedMethod);
+      
+      // Afficher un message de succès
+      toast.success(`Méthode de paiement ${newStatus ? 'activée' : 'désactivée'} avec succès`);
+    } catch (err) {
+      console.error('Erreur lors de la mise à jour du statut:', err);
+      setError('Impossible de mettre à jour le statut. Veuillez réessayer.');
+      toast.error('Erreur lors de la mise à jour du statut');
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  if (!method) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-2">Chargement des détails...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* En-tête */}
-      <div className="border-b border-yellow-500 pb-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Retour
-          </Button>
+      <Button
+        variant="ghost"
+        className="pl-0"
+        onClick={onBack}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Retour à la liste
+      </Button>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded flex items-start">
+          <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
           <div>
-            <h2 className="text-gray-900">{paymentMethod.name}</h2>
-            <p className="text-gray-600">Détails de la méthode de paiement</p>
+            <p className="font-medium">Erreur</p>
+            <p className="text-sm">{error}</p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Informations générales */}
-      <Card className="border-0 shadow-md overflow-hidden relative">
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
+      <Card>
         <CardHeader>
-          <CardTitle className="text-gray-900">Informations générales</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex justify-between items-start">
             <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <CreditCard className="h-4 w-4" />
-                Nom
-              </Label>
-              <div className="mt-1 font-medium">{paymentMethod.name}</div>
+              <CardTitle className="text-2xl">{method.name}</CardTitle>
+              <CardDescription className="mt-1">
+                {method.technicalName}
+              </CardDescription>
             </div>
-            <div>
-              <Label className="text-sm text-muted-foreground">Type</Label>
-              <div className="mt-1">
-                <Badge variant="outline">{typeLabels[paymentMethod.type]}</Badge>
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                {paymentMethod.status === "active" ? (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                ) : paymentMethod.status === "pending" ? (
-                  <Clock className="h-4 w-4 text-amber-500" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-red-500" />
-                )}
-                Statut
-              </Label>
-              <div className="mt-1">
-                <Badge
-                  variant="secondary"
-                  className={`${statusColors[paymentMethod.status]} text-white`}
-                >
-                  {statusLabels[paymentMethod.status]}
-                </Badge>
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Dernière utilisation
-              </Label>
-              <div className="mt-1">
-                {paymentMethod.lastUsed
-                  ? new Date(paymentMethod.lastUsed).toLocaleDateString("fr-FR", {
-                      day: "2-digit",
-                      month: "long",
-                      year: "numeric",
-                    })
-                  : "Jamais utilisée"}
-              </div>
-            </div>
-          </div>
-          <Separator />
-          <div>
-            <Label className="text-sm text-muted-foreground">Description</Label>
-            <div className="mt-1 text-muted-foreground">{paymentMethod.description}</div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Frais */}
-      <Card className="border-0 shadow-md overflow-hidden relative">
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-        <CardHeader>
-          <CardTitle className="text-gray-900">Frais de transaction</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Frais en pourcentage
-              </Label>
-              <div className="mt-1 text-lg font-semibold">
-                {paymentMethod.fees.percentage}%
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <Coins className="h-4 w-4" />
-                Frais fixes
-              </Label>
-              <div className="mt-1 text-lg font-semibold">
-                {paymentMethod.fees.fixed > 0
-                  ? formatPrice(paymentMethod.fees.fixed, paymentMethod.fees.currency)
-                  : "Aucun"}
-              </div>
-            </div>
-          </div>
-          {paymentMethod.fees.percentage === 0 && paymentMethod.fees.fixed === 0 && (
-            <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-              <p className="text-sm text-green-700 dark:text-green-300">
-                Cette méthode de paiement est gratuite (aucun frais)
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Devises supportées */}
-      <Card className="border-0 shadow-md overflow-hidden relative">
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-        <CardHeader>
-          <CardTitle className="text-gray-900">Devises supportées</CardTitle>
-          <CardDescription className="text-gray-600">
-            {paymentMethod.supportedCurrencies.length} devise(s) disponible(s)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {paymentMethod.supportedCurrencies.map((currency, index) => (
-              <Badge key={index} variant="secondary" className="text-sm">
-                {currency}
+            <div className="flex items-center space-x-2">
+              <Badge variant={method.active ? "default" : "secondary"}>
+                {method.active ? "Actif" : "Inactif"}
               </Badge>
-            ))}
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="status"
+                  checked={method.active}
+                  onCheckedChange={handleStatusChange}
+                  disabled={isLoading}
+                />
+                <Label htmlFor="status">
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : method.active ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <X className="h-4 w-4 text-red-500" />
+                  )}
+                </Label>
+              </div>
+            </div>
           </div>
+        </CardHeader>
+
+        <CardContent>
+          <Tabs defaultValue="overview" className="space-y-4">
+            <TabsContent value="overview" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-lg border bg-card p-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Devise de référence
+                  </h3>
+                  <p className="mt-1 text-lg font-semibold">
+                    {method.referenceCurrency}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Frais de dépôt
+                  </h3>
+                  <p className="mt-1 text-lg font-semibold">
+                    {method.depositFeeRate}%
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Frais de retrait
+                  </h3>
+                  <p className="mt-1 text-lg font-semibold">
+                    {method.withdrawalFeeRate}%
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Transactions actives
+                  </h3>
+                  <p className="mt-1 text-lg font-semibold">
+                    {method.activeTransactionsCount}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Montant max. par transaction
+                  </h3>
+                  <p className="mt-1 text-lg font-semibold">
+                    {method.maxTransactionAmount.toLocaleString()} {method.referenceCurrency}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Délai de traitement
+                  </h3>
+                  <p className="mt-1 text-lg font-semibold">
+                    {method.transactionCooldown} minutes
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <h3 className="text-lg font-semibold mb-4">
+                  Informations supplémentaires
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Supporte plusieurs devises
+                    </h4>
+                    <p className="mt-1">
+                      {method.supportsMultiCurrency ? "Oui" : "Non"}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      TVA
+                    </h4>
+                    <p className="mt-1">{method.txTva}%</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Partenaire
+                    </h4>
+                    <p className="mt-1">{method.txPartner}%</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Date de création
+                    </h4>
+                    <p className="mt-1">
+                      {formatDate(method.createdAt)}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Identifiant technique
+                    </h4>
+                    <p className="mt-1 font-mono text-sm">{method.id}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Slug
+                    </h4>
+                    <p className="mt-1">{method.slug}</p>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
+
+        <CardFooter className="flex justify-between border-t px-6 py-4">
+          <Button variant="outline" onClick={onBack}>
+            Retour à la liste
+          </Button>
+          <div className="space-x-2">
+            <Button variant="outline" disabled>
+              Modifier
+            </Button>
+            <Button disabled>Enregistrer les modifications</Button>
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );
 }
-

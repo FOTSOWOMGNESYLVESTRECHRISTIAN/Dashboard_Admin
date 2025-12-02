@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -44,9 +44,12 @@ import { ApplicationDetails, Application } from "./ApplicationDetails";
 import { SubscriptionDetails, Subscription } from "./SubscriptionDetails";
 import { Users, User } from "./Users";
 import { UserDetails } from "./UserDetails";
-import { Payment, PaymentMethod, Wallet } from "./Payment";
+import { Payment } from "./Payment";
 import { PaymentMethodDetails } from "./PaymentMethodDetails";
 import { WalletDetails } from "./WalletDetails";
+import { AccountDetails } from "./AccountDetails";
+import { PaymentMethod, Wallet, Account } from "../types/payment";
+import { getAccountById } from "../services/paymentService";
 import { TrialPolicies } from "./TrialPolicies";
 import logo from "@/assets/1200x630wa-removebg-preview.png";
 import type { Application as ApiApplication } from "../services/applicationService";
@@ -59,14 +62,167 @@ interface DashboardProps {
 
 type Page = "stats" | "applications" | "subscriptions" | "users" | "payment" | "settings" | "trialPolicies";
 
+// Mapping entre les pages et les noms d'URL
+const pageToRoute: Record<Page, string> = {
+  stats: "statistiques",
+  applications: "applications",
+  subscriptions: "subscriptions",
+  users: "utilisateurs",
+  payment: "paiements",
+  settings: "parametres",
+  trialPolicies: "periodes-essai",
+};
+
+// Mapping inverse pour récupérer la page depuis l'URL
+const routeToPage: Record<string, Page> = Object.entries(pageToRoute).reduce(
+  (acc, [page, route]) => {
+    acc[route] = page as Page;
+    return acc;
+  },
+  {} as Record<string, Page>
+);
+
+// Fonction pour obtenir la route depuis l'URL
+const getPageFromUrl = (): Page => {
+  const path = window.location.pathname.replace(/^\//, "");
+  const route = path.split("/")[0] || "statistiques";
+  return routeToPage[route] || "stats";
+};
+
+// Fonction pour obtenir les paramètres de détail depuis l'URL
+const getDetailFromUrl = (): { page: Page; detailId?: string; detailName?: string } | null => {
+  const path = window.location.pathname.replace(/^\//, "");
+  const parts = path.split("/").filter(Boolean);
+  
+  if (parts.length < 2) return null;
+  
+  const route = parts[0];
+  const page = routeToPage[route];
+  if (!page) return null;
+  
+  return {
+    page,
+    detailName: parts[1],
+  };
+};
+
+// Fonction pour mettre à jour l'URL
+const updateUrl = (page: Page, detailId?: string) => {
+  let newUrl = `/${pageToRoute[page]}`;
+  if (detailId) {
+    newUrl += `/${detailId}`;
+  }
+  if (window.location.pathname !== newUrl) {
+    window.history.pushState({ page, detailId }, "", newUrl);
+  }
+};
+
 export function Dashboard({ onLogout, user }: DashboardProps) {
-  const [currentPage, setCurrentPage] = useState<Page>("stats");
+  // Initialiser la page depuis l'URL
+  const [currentPage, setCurrentPage] = useState<Page>(() => getPageFromUrl());
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Effet pour gérer le chargement initial et les changements d'URL
+  useEffect(() => {
+    const handlePopState = async () => {
+      const detailInfo = getDetailFromUrl();
+      const page = getPageFromUrl();
+      
+      setCurrentPage(page);
+      
+      // Réinitialiser les détails sélectionnés
+      setSelectedApplication(null);
+      setSelectedSubscription(null);
+      setSelectedUser(null);
+      setSelectedPaymentMethod(null);
+      setSelectedWallet(null);
+      setSelectedAccount(null);
+      
+      // Charger les détails si nécessaire
+      if (detailInfo) {
+        if (detailInfo.page === 'applications' && detailInfo.detailName) {
+          loadApplicationDetails(detailInfo.detailName);
+        } else if (detailInfo.page === 'users' && detailInfo.detailName) {
+          loadUserDetails(detailInfo.detailName);
+        } else if (detailInfo.page === 'payment' && detailInfo.detailName) {
+          if (detailInfo.detailName.startsWith('account-')) {
+            const accountId = detailInfo.detailName.replace('account-', '');
+            // Charger les détails du compte
+            try {
+              const account = await getAccountById(accountId);
+              setSelectedAccount(account);
+            } catch (err) {
+              console.error('Erreur lors du chargement du compte:', err);
+              // Gérer l'erreur (par exemple, afficher un message à l'utilisateur)
+            }
+          }
+        }
+      }
+    };
+
+    // Gestion initiale
+    handlePopState();
+    
+    // Écouter les changements d'URL (navigation avant/arrière)
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Fonction pour charger les détails d'une application
+  const loadApplicationDetails = async (appId: string) => {
+    try {
+      setIsLoading(true);
+      // Ici, vous devriez appeler votre service pour récupérer les détails de l'application
+      // Par exemple : const app = await applicationService.getApplicationById(appId);
+      // setSelectedApplication(adaptApplicationForDetails(app));
+      
+      // Pour l'instant, on simule le chargement
+      const app = applications.find(a => a.id === appId);
+      if (app) {
+        setSelectedApplication(app);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails de l\'application:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fonction pour charger les détails d'un utilisateur
+  const loadUserDetails = async (userId: string) => {
+    try {
+      setIsLoading(true);
+      // Ici, vous devriez appeler votre service pour récupérer les détails de l'utilisateur
+      // Par exemple : const user = await userService.getUserById(userId);
+      // setSelectedUser(user);
+      
+      // Pour l'instant, on simule le chargement
+      const user = users.find((u: User) => u.id === userId);
+      if (user) {
+        setSelectedUser(user);
+      } else {
+        // Si l'utilisateur n'est pas trouvé dans la liste, on pourrait le charger depuis l'API
+        // const userFromApi = await userService.getUserById(userId);
+        // setSelectedUser(userFromApi);
+        console.warn(`Utilisateur avec l'ID ${userId} non trouvé dans la liste`);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails de l\'utilisateur:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
 const adaptApplicationForDetails = (app: ApiApplication): Application => {
   const allowedStatuses: Application["status"][] = ["active", "inactive", "maintenance"];
@@ -120,11 +276,14 @@ const menuItems = [
   ];
 
   const handleViewApplicationDetails = (app: ApiApplication) => {
-    setSelectedApplication(adaptApplicationForDetails(app));
+    const adaptedApp = adaptApplicationForDetails(app);
+    setSelectedApplication(adaptedApp);
+    updateUrl("applications", adaptedApp.id);
   };
 
   const handleBackFromApplicationDetails = () => {
     setSelectedApplication(null);
+    updateUrl("applications");
   };
 
   const handleUpdateApplication = (updatedApp: Application) => {
@@ -136,18 +295,25 @@ const menuItems = [
 
   const handleViewSubscriptionDetails = (subscription: Subscription) => {
     setSelectedSubscription(subscription);
+    updateUrl("subscriptions");
+    const contextSlug = subscription.contextName.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
+    window.history.pushState({ page: "subscriptions", detail: subscription.id }, "", `/subscriptions/${contextSlug}`);
   };
 
   const handleBackFromSubscriptionDetails = () => {
     setSelectedSubscription(null);
+    updateUrl("subscriptions");
+    window.history.pushState({ page: "subscriptions" }, "", "/subscriptions");
   };
 
   const handleViewUserDetails = (user: User) => {
     setSelectedUser(user);
+    updateUrl("users", user.id);
   };
 
   const handleBackFromUserDetails = () => {
     setSelectedUser(null);
+    updateUrl("users");
   };
 
   const handleViewPaymentMethodDetails = (method: PaymentMethod) => {
@@ -158,6 +324,16 @@ const menuItems = [
     setSelectedPaymentMethod(null);
   };
 
+  const loadWalletDetails = async (walletId: string) => {
+    try {
+      // Implémentez la logique de rafraîchissement du portefeuille ici
+      // Par exemple : const wallet = await getWalletById(walletId);
+      // setSelectedWallet(wallet);
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails du portefeuille:', error);
+    }
+  };
+
   const handleViewWalletDetails = (wallet: Wallet) => {
     setSelectedWallet(wallet);
   };
@@ -166,16 +342,35 @@ const menuItems = [
     setSelectedWallet(null);
   };
 
+  const handleViewAccountDetails = (account: Account) => {
+    setSelectedAccount(account);
+    updateUrl('payment', `account-${account.id}`);
+  };
+
+  const handleBackFromAccountDetails = () => {
+    setSelectedAccount(null);
+    updateUrl('payment');
+  };
+
   const currentHeading =
     (selectedApplication && currentPage === "applications" && selectedApplication.name) ||
     (selectedSubscription && currentPage === "subscriptions" && selectedSubscription.contextName) ||
     (selectedUser && currentPage === "users" && selectedUser.name) ||
     (selectedPaymentMethod && currentPage === "payment" && selectedPaymentMethod.name) ||
-    (selectedWallet && currentPage === "payment" && `Wallet de ${selectedWallet.userName}`) ||
+    (selectedWallet && currentPage === "payment" && `Portefeuille de ${selectedWallet.account.accountName}`) ||
+    (selectedAccount && currentPage === "payment" && `Compte ${selectedAccount.accountName}`) ||
     menuItems.find((item) => item.id === currentPage)?.label ||
     (currentPage === "settings" ? "Paramètres" : "Statistiques");
 
   const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-yellow-500"></div>
+        </div>
+      );
+    }
+
     if (selectedApplication && currentPage === "applications") {
       return (
         <ApplicationDetails
@@ -206,8 +401,8 @@ const menuItems = [
 
     if (selectedPaymentMethod && currentPage === "payment") {
       return (
-        <PaymentMethodDetails
-          paymentMethod={selectedPaymentMethod}
+<PaymentMethodDetails
+          method={selectedPaymentMethod}
           onBack={handleBackFromPaymentMethodDetails}
         />
       );
@@ -215,9 +410,19 @@ const menuItems = [
 
     if (selectedWallet && currentPage === "payment") {
       return (
-        <WalletDetails
+<WalletDetails
           wallet={selectedWallet}
           onBack={handleBackFromWalletDetails}
+          onRefresh={() => loadWalletDetails(selectedWallet.id)}
+        />
+      );
+    }
+
+    if (selectedAccount && currentPage === "payment") {
+      return (
+        <AccountDetails
+          accountId={selectedAccount.id}
+          onBack={handleBackFromAccountDetails}
         />
       );
     }
@@ -236,6 +441,7 @@ const menuItems = [
           <Payment
             onViewPaymentMethodDetails={handleViewPaymentMethodDetails}
             onViewWalletDetails={handleViewWalletDetails}
+            onViewAccountDetails={handleViewAccountDetails}
           />
         );
       case "trialPolicies":
@@ -245,6 +451,50 @@ const menuItems = [
       default:
         return <DashboardStats />;
     }
+  };
+
+  // Gestion des changements d'URL et chargement des détails
+  useEffect(() => {
+    const handlePopState = () => {
+      const detailInfo = getDetailFromUrl();
+      const page = getPageFromUrl();
+      
+      setCurrentPage(page);
+      
+      // Réinitialiser les détails sélectionnés
+      setSelectedApplication(null);
+      setSelectedSubscription(null);
+      setSelectedUser(null);
+      setSelectedPaymentMethod(null);
+      setSelectedWallet(null);
+      
+      // Charger les détails si nécessaire
+      if (detailInfo) {
+        if (detailInfo.page === 'applications' && detailInfo.detailName) {
+          loadApplicationDetails(detailInfo.detailName);
+        } else if (detailInfo.page === 'subscriptions' && detailInfo.detailName) {
+          // Implémenter le chargement des détails d'abonnement si nécessaire
+        } else if (detailInfo.page === 'users' && detailInfo.detailName) {
+          // Implémenter le chargement des détails utilisateur si nécessaire
+        }
+      }
+    };
+
+    // Gestion initiale
+    handlePopState();
+    
+    // Écouter les changements d'URL (navigation avant/arrière)
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Fonction pour changer de page et mettre à jour l'URL
+  const handlePageChange = (page: Page) => {
+    setCurrentPage(page);
+    updateUrl(page);
   };
 
   const displayName =
@@ -263,13 +513,13 @@ const menuItems = [
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex h-screen w-full overflow-hidden">
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-4 px-2 py-3">
-              <img src={logo} alt="Logo" className="w-16 h-16 object-contain" />
+              <img src={logo} alt="Logo" className="w-16 h-12 object-contain" />
               <div className="flex flex-col">
-                <span className="text-lg font-semibold">Admin Dashboard</span>
+                <span className="text-lg font-semibold">FAROTY</span>
                 <span className="text-xs text-muted-foreground">
                   Panel de contrôle
                 </span>
@@ -286,7 +536,7 @@ const menuItems = [
                     <SidebarMenuItem key={item.id}>
                       <SidebarMenuButton
                         isActive={currentPage === item.id}
-                        onClick={() => setCurrentPage(item.id)}
+                        onClick={() => handlePageChange(item.id)}
                       >
                         <item.icon className="h-4 w-4" />
                         <span>{item.label}</span>
@@ -304,7 +554,7 @@ const menuItems = [
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={currentPage === "settings"}
-                      onClick={() => setCurrentPage("settings")}
+                      onClick={() => handlePageChange("settings")}
                     >
                       <SettingsIcon className="h-4 w-4" />
                       <span>Paramètres</span>
@@ -340,7 +590,7 @@ const menuItems = [
                   >
                     <DropdownMenuLabel>Mon Compte</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setCurrentPage("settings")}>
+                    <DropdownMenuItem onClick={() => handlePageChange("settings")}>
                       <SettingsIcon className="mr-2 h-4 w-4" />
                       Paramètres
                     </DropdownMenuItem>
@@ -356,22 +606,29 @@ const menuItems = [
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset>
-          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
+        <SidebarInset className="flex flex-col overflow-hidden">
+          <header className="sticky top-0 z-50 flex h-16 items-center gap-2 border-b bg-background px-4">
             <SidebarTrigger />
-            <Separator orientation="vertical" className="mr-2 h-6" />
-            <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <Separator orientation="vertical" className="h-6" />
+            
+            {/* Conteneur principal qui prend tout l'espace restant */}
+            <div className="flex flex-1 items-center justify-between">
+              {/* Titre à gauche */}
               <h1 className="text-lg">{currentHeading}</h1>
-              <Button variant="outline" size="sm" onClick={onLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
+              
+              {/* Bouton déconnexion à droite */}
+              <Button variant="outline" size="sm" onClick={onLogout} className="w-fit text-xs text-muted-foreground bg-red-500 hover:bg-red-600 px-3 py-1 text-white hover:text-white">
+                <LogOut className="mr-1 h-4 w-4" />
                 Déconnexion
               </Button>
             </div>
           </header>
-          <main className="flex flex-1 flex-col gap-4 p-6">
+
+          <main className="flex flex-1 flex-col gap-4 p-6 overflow-y-auto overflow-x-hidden min-h-0">
             {renderContent()}
           </main>
         </SidebarInset>
+
       </div>
     </SidebarProvider>
   );

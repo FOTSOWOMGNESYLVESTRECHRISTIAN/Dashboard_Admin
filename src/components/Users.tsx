@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Eye, UserX, UserCheck } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Eye, UserX, UserCheck, RefreshCw, AlertCircle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -41,76 +41,23 @@ import {
 } from "./ui/alert-dialog";
 import { UserDetails } from "./UserDetails";
 import { toast } from "sonner";
+import { userService } from "../services/userService";
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  phoneNumber: string | null;
+  profilePictureUrl: string | null;
   role: "admin" | "user" | "moderator";
   status: "active" | "inactive" | "suspended";
   createdAt: string;
   lastLogin: string | null;
+  countryName: string | null;
+  languageName: string | null;
   subscriptions: string[];
   applications: string[];
 }
-
-const mockUsers: User[] = [
-  {
-    id: "1",
-    name: "Marie Dupont",
-    email: "marie.dupont@techcorp.com",
-    role: "admin",
-    status: "active",
-    createdAt: "2024-01-15",
-    lastLogin: "2024-11-15",
-    subscriptions: ["1", "2"],
-    applications: ["1", "3"],
-  },
-  {
-    id: "2",
-    name: "Jean Martin",
-    email: "jean.martin@techcorp.com",
-    role: "user",
-    status: "active",
-    createdAt: "2024-02-20",
-    lastLogin: "2024-11-14",
-    subscriptions: ["1"],
-    applications: ["1"],
-  },
-  {
-    id: "3",
-    name: "Sophie Bernard",
-    email: "sophie.bernard@techcorp.com",
-    role: "moderator",
-    status: "active",
-    createdAt: "2024-03-10",
-    lastLogin: "2024-11-15",
-    subscriptions: ["1", "3"],
-    applications: ["1", "2", "3"],
-  },
-  {
-    id: "4",
-    name: "Alexandre Leroy",
-    email: "alexandre@startup.com",
-    role: "user",
-    status: "inactive",
-    createdAt: "2024-04-05",
-    lastLogin: "2024-10-20",
-    subscriptions: ["2"],
-    applications: ["3"],
-  },
-  {
-    id: "5",
-    name: "Camille Petit",
-    email: "camille@startup.com",
-    role: "user",
-    status: "suspended",
-    createdAt: "2024-05-12",
-    lastLogin: "2024-09-15",
-    subscriptions: ["2"],
-    applications: ["3"],
-  },
-];
 
 const statusColors = {
   active: "bg-green-600",
@@ -135,15 +82,27 @@ interface UsersProps {
 }
 
 export function Users({ onViewDetails }: UsersProps) {
+  // États pour la recherche et le filtrage
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterRole, setFilterRole] = useState<string>("all");
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  
+  // États pour la gestion des données
+  const [users, setUsers] = useState<User[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // États pour les boîtes de dialogue
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
+  
+  // État pour l'utilisateur sélectionné
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  
+  // État pour le formulaire
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -151,15 +110,51 @@ export function Users({ onViewDetails }: UsersProps) {
     status: "active" as "active" | "inactive" | "suspended",
   });
 
+  // Chargement initial des utilisateurs
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('[Users] Chargement des utilisateurs...');
+        
+        const data = await userService.getAllUsers();
+        console.log(`[Users] ${data.length} utilisateurs chargés`);
+        
+        setUsers(data);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue';
+        console.error('[Users] Erreur lors du chargement des utilisateurs:', error);
+        setError(errorMessage);
+        toast.error(`Erreur: ${errorMessage}`);
+        setUsers([]); // Réinitialiser la liste en cas d'erreur
+      } finally {
+        setLoading(false);
+        setInitialLoading(false);
+      }
+    };
+
+    loadUsers();
+  }, []);
+
   const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    try {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        user.name?.toLowerCase().includes(searchLower) ||
+        user.email?.toLowerCase().includes(searchLower) ||
+        (user.phoneNumber && user.phoneNumber.toLowerCase().includes(searchLower));
 
-    const matchesStatus = filterStatus === "all" || user.status === filterStatus;
-    const matchesRole = filterRole === "all" || user.role === filterRole;
+      const matchesStatus =
+        filterStatus === "all" || user.status === filterStatus;
 
-    return matchesSearch && matchesStatus && matchesRole;
+      const matchesRole = filterRole === "all" || user.role === filterRole;
+
+      return matchesSearch && matchesStatus && matchesRole;
+    } catch (error) {
+      console.error('Erreur lors du filtrage des utilisateurs:', error, user);
+      return false; // Exclure les utilisateurs qui causent des erreurs
+    }
   });
 
   const resetForm = () => {
@@ -271,6 +266,28 @@ export function Users({ onViewDetails }: UsersProps) {
     setIsAddDialogOpen(true);
   };
 
+  // Fonction pour recharger les utilisateurs
+  const reloadUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('[Users] Rechargement des utilisateurs...');
+      
+      const data = await userService.getAllUsers();
+      console.log(`[Users] ${data.length} utilisateurs rechargés`);
+      
+      setUsers(data);
+      toast.success('Liste des utilisateurs mise à jour');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      console.error('[Users] Erreur lors du rechargement des utilisateurs:', error);
+      setError(errorMessage);
+      toast.error(`Erreur: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 h-full flex flex-col overflow-hidden">
       {/* En-tête */}
@@ -278,13 +295,30 @@ export function Users({ onViewDetails }: UsersProps) {
         <div>
           <h2 className="text-gray-900">Utilisateurs</h2>
           <p className="text-gray-600">
-            Gérez tous les utilisateurs de l'application
+            {initialLoading 
+              ? 'Chargement en cours...' 
+              : `Gérez les ${users.length} utilisateurs de l'application`}
           </p>
         </div>
-        <Button onClick={openAddDialog} className="bg-[#1e3a5f] hover:bg-[#152d4a] text-white">
-          <Plus className="mr-2 h-4 w-4" />
-          Nouvel Utilisateur
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={reloadUsers} 
+            variant="outline" 
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualiser
+          </Button>
+          <Button 
+            onClick={openAddDialog} 
+            className="bg-[#1e3a5f] hover:bg-[#152d4a] text-white"
+            disabled={loading}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Nouvel Utilisateur
+          </Button>
+        </div>
       </div>
 
       <Card className="border-0 shadow-md overflow-hidden relative flex-1 flex flex-col">
@@ -300,7 +334,7 @@ export function Users({ onViewDetails }: UsersProps) {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher par nom ou email..."
+                placeholder="Rechercher par nom, email ou téléphone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -333,10 +367,10 @@ export function Users({ onViewDetails }: UsersProps) {
           <div className="rounded-md border overflow-hidden flex-1 min-h-0">
             <div className="h-full overflow-y-auto">
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-0">
+                <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
                     <TableHead className="whitespace-nowrap min-w-[150px]">Nom</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[200px]">Email</TableHead>
+                    <TableHead className="whitespace-nowrap min-w-[200px]">Email / Téléphone</TableHead>
                     <TableHead className="whitespace-nowrap min-w-[120px]">Rôle</TableHead>
                     <TableHead className="whitespace-nowrap min-w-[100px]">Statut</TableHead>
                     <TableHead className="whitespace-nowrap min-w-[110px]">Date création</TableHead>
@@ -345,10 +379,56 @@ export function Users({ onViewDetails }: UsersProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {initialLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12">
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-500"></div>
+                          <p className="text-muted-foreground">Chargement des utilisateurs...</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : error ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12">
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="rounded-full bg-red-100 p-3">
+                            <AlertCircle className="h-8 w-8 text-red-600" />
+                          </div>
+                          <p className="text-red-600 font-medium">{error}</p>
+                          <Button 
+                            variant="outline" 
+                            onClick={reloadUsers}
+                            disabled={loading}
+                            className="flex items-center gap-2"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                            Réessayer
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <Search className="h-12 w-12 text-muted-foreground" />
+                          <p className="text-muted-foreground">Aucun utilisateur trouvé</p>
+                          {searchTerm || filterStatus !== 'all' || filterRole !== 'all' ? (
+                            <p className="text-sm text-muted-foreground">
+                              Essayez de modifier vos filtres de recherche
+                            </p>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="whitespace-nowrap font-medium">{user.name}</TableCell>
-                      <TableCell className="whitespace-nowrap">{user.email}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {user.email !== "Non renseigné" ? user.email : user.phoneNumber || "—"}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge variant="outline">
                           {roleLabels[user.role]}
@@ -413,7 +493,8 @@ export function Users({ onViewDetails }: UsersProps) {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ))
+                  )}
                 </TableBody>
               </Table>
             </div>

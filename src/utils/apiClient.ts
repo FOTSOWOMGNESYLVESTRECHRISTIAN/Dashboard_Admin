@@ -124,17 +124,29 @@ export async function apiFetch<TResponse = unknown>(
     !(body instanceof FormData) &&
     !(body instanceof Blob);
 
-  // Ajouter le token Bearer si disponible et non déjà présent
+  // Récupérer le token d'authentification
   const token = getAuthToken();
-  const authHeaders: HeadersInit = token && !(headers as any)?.Authorization
-    ? { Authorization: `Bearer ${token}` }
-    : {};
+  
+  // Créer les en-têtes d'authentification si un token est disponible
+  const authHeaders: HeadersInit = {};
+  if (token) {
+    // Vérifier si le token contient déjà 'Bearer '
+    const authValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    authHeaders['Authorization'] = authValue;
+  }
 
+  // Fusionner les en-têtes avec priorité : headers personnalisés > auth > defaults
   const mergedHeaders: HeadersInit = {
     ...DEFAULT_HEADERS,
-    ...authHeaders,
-    ...headers,
+    ...headers, // Les en-têtes personnalisés peuvent écraser les valeurs par défaut
+    ...authHeaders, // L'authentification a la priorité la plus haute
   };
+  
+  // Journalisation des en-têtes en développement
+  if (_import_meta_env?.DEV) {
+    console.log('[API] Auth token:', token ? 'Present' : 'Missing');
+    console.log('[API] Final request headers:', JSON.parse(JSON.stringify(mergedHeaders)));
+  }
 
   if (body instanceof FormData || body instanceof Blob) {
     delete (mergedHeaders as Record<string, string>)["Content-Type"];

@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
 import { Label } from "./ui/label";
-import { ArrowLeft, Users, Check, X, AlertCircle, Calendar, Tag } from "lucide-react";
+import { ArrowLeft, Users, Check, X, AlertCircle, Calendar, Tag, Loader2 } from "lucide-react";
+import { applicationService } from "../services/applicationService";
 
 interface SubscriptionPlan {
   planId: string;
@@ -61,8 +63,31 @@ const statusLabels = {
 };
 
 export function SubscriptionDetails({ subscription, onBack }: SubscriptionDetailsProps) {
+  const [appFeatures, setAppFeatures] = useState<any[]>([]);
+  const [loadingFeatures, setLoadingFeatures] = useState(false);
+
+  useEffect(() => {
+    const loadAppFeatures = async () => {
+      if (!subscription.applicationId) return;
+      
+      try {
+        setLoadingFeatures(true);
+        const features = await applicationService.getFeaturesByApplication(subscription.applicationId);
+        setAppFeatures(features);
+      } catch (error) {
+        console.error("[SubscriptionDetails] Error loading features:", error);
+      } finally {
+        setLoadingFeatures(false);
+      }
+    };
+
+    loadAppFeatures();
+  }, [subscription.applicationId]);
+
   const formatPrice = (price: number, currency: string) => {
-    return `${price.toFixed(2)} ${currency}`;
+    // Remplacer EUR par XFA
+    const displayCurrency = currency === "EUR" ? "XFA" : currency;
+    return `${price.toFixed(2)} ${displayCurrency}`;
   };
 
   const isQuotaExhausted = (limit: number | null, used?: number) => {
@@ -162,10 +187,16 @@ export function SubscriptionDetails({ subscription, onBack }: SubscriptionDetail
               </div>
             </div>
             <div>
-              <Label className="text-sm text-muted-foreground">Nombre de personnes</Label>
+              <Label className="text-sm text-muted-foreground">Nombre de personnes abonnées</Label>
               <div className="mt-1 flex items-center gap-1">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">{subscription.numberOfPeople}</span>
+                <span className="font-medium">
+                  {subscription.people.length > 0 
+                    ? subscription.people.length 
+                    : subscription.numberOfPeople > 0 
+                      ? subscription.numberOfPeople 
+                      : "—"}
+                </span>
               </div>
             </div>
             <div>
@@ -223,28 +254,87 @@ export function SubscriptionDetails({ subscription, onBack }: SubscriptionDetail
         <CardHeader>
           <CardTitle className="text-gray-900">Personnes abonnées</CardTitle>
           <CardDescription className="text-gray-600">
-            {subscription.people.length} personne(s) ayant souscrit à cette subscription
+            {subscription.people.length > 0 
+              ? `${subscription.people.length} personne(s) ayant souscrit à cette subscription`
+              : subscription.numberOfPeople > 0
+                ? `${subscription.numberOfPeople} personne(s) dans ce contexte`
+                : "Aucune information disponible"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {subscription.people.map((person) => (
-              <div
-                key={person.id}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-card"
-              >
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
-                  <Users className="h-5 w-5 text-primary" />
+          {subscription.people.length > 0 ? (
+            <div className="space-y-2">
+              {subscription.people.map((person) => (
+                <div
+                  key={person.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                >
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
+                    <Users className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium">{person.name}</div>
+                    <div className="text-sm text-muted-foreground">{person.email}</div>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <div className="font-medium">{person.name}</div>
-                  <div className="text-sm text-muted-foreground">{person.email}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              {subscription.numberOfPeople > 0 
+                ? `${subscription.numberOfPeople} personne(s) dans ce contexte`
+                : "Aucune information sur les personnes abonnées"}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Fonctionnalités de l'application */}
+      {subscription.applicationId && (
+        <Card className="border-0 shadow-md overflow-hidden relative">
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
+          <CardHeader>
+            <CardTitle className="text-gray-900">Fonctionnalités de l'application</CardTitle>
+            <CardDescription className="text-gray-600">
+              Fonctionnalités disponibles pour "{subscription.application}"
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingFeatures ? (
+              <div className="text-center py-8 text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Chargement des fonctionnalités...
+              </div>
+            ) : appFeatures.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Aucune fonctionnalité disponible
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {appFeatures.map((feature: any, index: number) => (
+                  <div
+                    key={feature.id || index}
+                    className="flex items-start gap-2 p-3 rounded-lg border bg-card"
+                  >
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{feature.name || feature.key || "Fonctionnalité"}</div>
+                      {feature.description && (
+                        <div className="text-xs text-muted-foreground mt-1">{feature.description}</div>
+                      )}
+                      {feature.type && (
+                        <Badge variant="outline" className="text-xs mt-1">
+                          {feature.type}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Plans souscrits */}
       <Card className="border-0 shadow-md overflow-hidden relative">
@@ -257,75 +347,115 @@ export function SubscriptionDetails({ subscription, onBack }: SubscriptionDetail
         </CardHeader>
         <CardContent className="space-y-4">
           {subscription.plans.map((plan, planIndex) => (
-            <div key={planIndex} className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-lg">{plan.planName}</div>
-                  <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                    {plan.interval === "month" ? (
-                      <>
-                        <Calendar className="h-4 w-4" />
-                        <span>Facturation mensuelle</span>
-                      </>
-                    ) : (
-                      <>
-                        <Calendar className="h-4 w-4" />
-                        <span>Facturation annuelle</span>
-                      </>
-                    )}
+            <div key={planIndex} className="border border-gray-200 dark:border-gray-700 rounded-xl p-6 space-y-6 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-800 dark:text-white">{plan.planName}</h2>
+                  <div className="mt-2 flex items-center text-indigo-600 dark:text-indigo-400">
+                    <Calendar className="w-5 h-5 mr-2" />
+                    <span className="text-sm font-medium">
+                      {plan.interval === "month" ? "Facturation mensuelle" : "Facturation annuelle"}
+                    </span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-semibold">
+                <div className="text-right bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/20 px-4 py-3 rounded-lg">
+                  <div className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">
                     {formatPrice(plan.price, plan.currency)}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm font-medium text-indigo-500 dark:text-indigo-400">
                     / {plan.interval === "month" ? "mois" : "an"}
                   </div>
                 </div>
               </div>
-              <Separator />
-              <div>
-                <Label className="text-sm font-medium mb-2 block">
-                  Fonctionnalités ({plan.features.length})
-                </Label>
-                <div className="space-y-2">
+              <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-gray-700 my-2"></div>
+              <div className="mt-6">
+                <div className="flex items-center mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mr-4">
+                    <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
+                    Fonctionnalités de l'application
+                  </h3>
+                </div>
+                <div className="grid gap-4">
                   {plan.features.map((feature, featureIndex) => {
                     const quotaStatus = getQuotaStatus(feature.limit, feature.used);
                     const exhausted = isQuotaExhausted(feature.limit, feature.used);
+                    const percentage = feature.limit ? Math.round((feature.used || 0) / feature.limit * 100) : 0;
                     
                     return (
-                      <div
+                      <div 
                         key={featureIndex}
-                        className={`flex items-start gap-2 p-3 rounded-lg ${
-                          exhausted
-                            ? "bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800"
-                            : "bg-muted/50"
-                        }`}
+                        className="group relative p-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all duration-200 overflow-hidden"
                       >
-                        {exhausted ? (
-                          <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                        ) : (
-                          <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                        )}
-                        <div className="flex-1">
-                          <div className="font-medium text-sm flex items-center gap-2">
-                            {feature.featureName}
-                            {exhausted && (
-                              <Badge variant="destructive" className="text-xs">
+                        {/* Badge d'état */}
+                        <div className="absolute top-4 right-4">
+                          {exhausted ? (
+                            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/20">
+                              <AlertCircle className="w-5 h-5 text-red-500 dark:text-red-400" />
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-green-50 dark:bg-green-900/20">
+                              <Check className="w-5 h-5 text-green-500 dark:text-green-400" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* En-tête de la carte */}
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h4 className="text-lg font-semibold text-gray-800 dark:text-white">
+                              {feature.featureName}
+                            </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                              {quotaStatus.label}
+                              {quotaStatus.remaining !== undefined && quotaStatus.remaining > 0 && (
+                                <span className="ml-2 text-green-600 dark:text-green-400 font-medium">
+                                  ({quotaStatus.remaining} restant{quotaStatus.remaining > 1 ? 's' : ''})
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          
+                          {/* Badge d'état */}
+                          <div className="ml-4">
+                            {exhausted ? (
+                              <Badge variant="destructive" className="px-3 py-1.5 text-sm font-medium">
                                 Quota épuisé
+                              </Badge>
+                            ) : (
+                              <Badge className="px-3 py-1.5 text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800">
+                                Actif
                               </Badge>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {quotaStatus.label}
-                            {quotaStatus.remaining !== undefined && quotaStatus.remaining > 0 && (
-                              <span className="text-green-600 ml-2">
-                                ({quotaStatus.remaining} restant{quotaStatus.remaining > 1 ? "s" : ""})
-                              </span>
-                            )}
-                          </div>
                         </div>
+
+                        {/* Barre de progression */}
+                        {feature.limit !== null && feature.used !== undefined && (
+                          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-300 mb-2">
+                              <span className="font-medium">Utilisation</span>
+                              <span className="font-semibold">{percentage}%</span>
+                            </div>
+                            <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full ${
+                                  exhausted 
+                                    ? 'bg-gradient-to-r from-red-400 to-red-500' 
+                                    : 'bg-gradient-to-r from-indigo-500 to-purple-500'
+                                }`}
+                                style={{ width: `${Math.min(100, percentage)}%` }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between mt-2 text-sm text-gray-500 dark:text-gray-400">
+                              <span>{feature.used || 0} utilisé{feature.used !== 1 ? 's' : ''}</span>
+                              <span>{feature.limit} au total</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -338,4 +468,3 @@ export function SubscriptionDetails({ subscription, onBack }: SubscriptionDetail
     </div>
   );
 }
-

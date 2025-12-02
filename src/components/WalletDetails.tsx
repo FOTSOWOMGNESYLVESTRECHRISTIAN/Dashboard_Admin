@@ -1,263 +1,185 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+// src/components/WalletDetails.tsx
+import { useState, useEffect } from 'react';
 import { Button } from "./ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { ArrowLeft, AlertCircle, Loader2, Wallet as WalletIcon, CreditCard, RefreshCw } from "lucide-react";
 import { Badge } from "./ui/badge";
-import { Label } from "./ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { ArrowLeft, Wallet, User, CheckCircle, XCircle, Clock, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
-import { Wallet as WalletType } from "./Payment";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale/fr";
+import { toast } from 'sonner';
+import { Wallet } from './Payment';
 
 interface WalletDetailsProps {
-  wallet: WalletType;
+  wallet: Wallet;
   onBack: () => void;
+  onRefresh: () => Promise<void>;
 }
 
-const statusColors = {
-  active: "bg-green-600",
-  frozen: "bg-blue-500",
-  closed: "bg-red-500",
-};
+export function WalletDetails({ wallet: initialWallet, onBack, onRefresh }: WalletDetailsProps) {
+  const [wallet, setWallet] = useState<Wallet>(initialWallet);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-const statusLabels = {
-  active: "Actif",
-  frozen: "Gelé",
-  closed: "Fermé",
-};
-
-const transactionTypeLabels = {
-  deposit: "Dépôt",
-  withdrawal: "Retrait",
-  payment: "Paiement",
-  refund: "Remboursement",
-};
-
-const transactionStatusColors = {
-  completed: "bg-green-600",
-  pending: "bg-amber-500",
-  failed: "bg-red-500",
-};
-
-const transactionStatusLabels = {
-  completed: "Terminé",
-  pending: "En attente",
-  failed: "Échoué",
-};
-
-export function WalletDetails({ wallet, onBack }: WalletDetailsProps) {
-  const formatPrice = (price: number, currency: string) => {
-    return `${price.toFixed(2)} ${currency}`;
+  const refreshWallet = async () => {
+    try {
+      setIsLoading(true);
+      await onRefresh();
+      // Mettre à jour le portefeuille avec les dernières données
+      const response = await fetch(`${API_BASE_URL}/wallets/${wallet.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement des détails du portefeuille');
+      }
+      
+      const data = await response.json();
+      setWallet(data.data);
+    } catch (err) {
+      console.error('Erreur lors du rafraîchissement:', err);
+      setError('Impossible de rafraîchir les données du portefeuille');
+      toast.error('Erreur lors du rafraîchissement');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const totalDeposits = wallet.transactions
-    .filter((t) => t.type === "deposit" && t.status === "completed")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalWithdrawals = wallet.transactions
-    .filter((t) => (t.type === "withdrawal" || t.type === "payment") && t.status === "completed")
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
   return (
-    <div className="space-y-6">
-      {/* En-tête */}
-      <div className="border-b border-yellow-500 pb-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Retour
-          </Button>
-          <div>
-            <h2 className="text-gray-900">Wallet de {wallet.userName}</h2>
-            <p className="text-gray-600">Détails du wallet</p>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <Button variant="outline" size="sm" onClick={onBack} className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Retour à la liste
+      </Button>
 
-      {/* Informations générales */}
-      <Card className="border-0 shadow-md overflow-hidden relative">
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-        <CardHeader>
-          <CardTitle className="text-gray-900">Informations générales</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex justify-between items-start">
             <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Utilisateur
-              </Label>
-              <div className="mt-1 font-medium">{wallet.userName}</div>
+              <CardTitle className="text-2xl">{wallet.account.accountName}</CardTitle>
+              <CardDescription>{wallet.account.accountSubName}</CardDescription>
             </div>
-            <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <Wallet className="h-4 w-4" />
-                Solde actuel
-              </Label>
-              <div className="mt-1 text-2xl font-bold text-green-600">
-                {formatPrice(wallet.balance, wallet.currency)}
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm text-muted-foreground">Devise</Label>
-              <div className="mt-1">
-                <Badge variant="outline">{wallet.currency}</Badge>
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                {wallet.status === "active" ? (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                ) : wallet.status === "frozen" ? (
-                  <Clock className="h-4 w-4 text-blue-500" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-red-500" />
-                )}
-                Statut
-              </Label>
-              <div className="mt-1">
-                <Badge
-                  variant="secondary"
-                  className={`${statusColors[wallet.status]} text-white`}
-                >
-                  {statusLabels[wallet.status]}
-                </Badge>
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm text-muted-foreground flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Date de création
-              </Label>
-              <div className="mt-1">
-                {new Date(wallet.createdAt).toLocaleDateString("fr-FR", {
-                  day: "2-digit",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </div>
+            <div className="flex items-center space-x-2">
+              <Button variant="outline" size="sm" onClick={refreshWallet} disabled={isLoading}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Actualiser
+              </Button>
+              <Badge variant={wallet.frozen ? "destructive" : "outline"}>
+                {wallet.frozen ? "Gelé" : "Actif"}
+              </Badge>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Statistiques */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-0 shadow-md overflow-hidden relative">
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm text-gray-900">Total dépôts</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatPrice(totalDeposits, wallet.currency)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-md overflow-hidden relative">
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm text-gray-900">Total retraits</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {formatPrice(totalWithdrawals, wallet.currency)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-md overflow-hidden relative">
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm text-gray-900">Nombre de transactions</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{wallet.transactions.length}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Transactions */}
-      <Card className="border-0 shadow-md overflow-hidden relative">
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-        <CardHeader>
-          <CardTitle className="text-gray-900">Transactions ({wallet.transactions.length})</CardTitle>
-          <CardDescription className="text-gray-600">
-            Historique complet des transactions de ce wallet
-          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {wallet.transactions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Aucune transaction
-            </div>
-          ) : (
-            <div className="rounded-md border overflow-hidden">
-              <div className="max-h-[400px] overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-background z-0">
-                    <TableRow>
-                      <TableHead className="whitespace-nowrap min-w-[100px]">Type</TableHead>
-                      <TableHead className="whitespace-nowrap min-w-[150px]">Description</TableHead>
-                      <TableHead className="text-right whitespace-nowrap min-w-[100px]">Montant</TableHead>
-                      <TableHead className="whitespace-nowrap min-w-[100px]">Statut</TableHead>
-                      <TableHead className="whitespace-nowrap min-w-[110px]">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {wallet.transactions
-                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                      .map((transaction) => (
-                        <TableRow key={transaction.id}>
-                          <TableCell className="whitespace-nowrap">
-                            <Badge
-                              variant="outline"
-                              className={
-                                transaction.type === "deposit" || transaction.type === "refund"
-                                  ? "text-green-600 border-green-600"
-                                  : "text-red-600 border-red-600"
-                              }
-                            >
-                              {transactionTypeLabels[transaction.type]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{transaction.description}</TableCell>
-                          <TableCell
-                            className={`text-right whitespace-nowrap font-semibold ${
-                              transaction.amount > 0 ? "text-green-600" : "text-red-600"
-                            }`}
-                          >
-                            {transaction.amount > 0 ? "+" : ""}
-                            {formatPrice(transaction.amount, transaction.currency)}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <Badge
-                              variant="secondary"
-                              className={`${transactionStatusColors[transaction.status]} text-white`}
-                            >
-                              {transactionStatusLabels[transaction.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {new Date(transaction.createdAt).toLocaleDateString("fr-FR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
+        <CardContent className="pt-6">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-md">
+              <div className="flex items-center text-red-600 dark:text-red-400">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                <span>{error}</span>
               </div>
             </div>
           )}
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Informations générales</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Type de portefeuille:</span>
+                  <span className="text-sm font-medium">
+                    {wallet.walletType === 'PERSONAL' ? 'Personnel' : 'Entreprise'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Devise:</span>
+                  <span className="text-sm font-medium">
+                    {wallet.currency.nameFr} ({wallet.currency.code})
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Date de création:</span>
+                  <span className="text-sm font-medium">
+                    {format(new Date(wallet.createdAt), 'dd/MM/yyyy', { locale: fr })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Dernière mise à jour:</span>
+                  <span className="text-sm font-medium">
+                    {format(new Date(wallet.updatedAt), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Soldes</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Solde disponible:</span>
+                  <span className="text-sm font-medium">
+                    {wallet.balance.balance.toLocaleString()} {wallet.currency.symbol}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Solde gelé:</span>
+                  <span className="text-sm font-medium">
+                    {wallet.balance.frozenBalance.toLocaleString()} {wallet.currency.symbol}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Transactions en attente:</span>
+                  <span className="text-sm font-medium">
+                    {wallet.balance.pendingBalance.toLocaleString()} {wallet.currency.symbol}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2 border-t font-medium">
+                  <span>Solde total:</span>
+                  <span>
+                    {wallet.balance.totalBalance.toLocaleString()} {wallet.currency.symbol}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <h3 className="text-lg font-medium mb-4">Frais et limites</h3>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2">
+                <h4 className="font-medium">Frais</h4>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Dépôt:</span>
+                  <span className="text-sm font-medium">{wallet.depositFeeRate}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Retrait:</span>
+                  <span className="text-sm font-medium">{wallet.withdrawalFeeRate}%</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-medium">Limites</h4>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Transaction max:</span>
+                  <span className="text-sm font-medium">
+                    {wallet.maxTransactionAmount.toLocaleString()} {wallet.currency.symbol}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <h3 className="text-lg font-medium mb-4">Activité récente</h3>
+            <div className="text-sm text-muted-foreground">
+              <p>Nombre total de transactions: {wallet.transactionsCount}</p>
+              <p className="mt-2">
+                Dernière activité: {wallet.updatedAt ? format(new Date(wallet.updatedAt), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Aucune activité récente'}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
   );
 }
-

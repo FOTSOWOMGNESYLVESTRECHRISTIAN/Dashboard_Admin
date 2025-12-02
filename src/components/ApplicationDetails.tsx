@@ -944,8 +944,8 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                 </div>
               ) : (
                 <>
-                  <div className="rounded-xl border-2 border-gray-200 bg-gradient-to-br from-gray-50/50 to-white p-6 space-y-5 shadow-inner">
-                    <div className="flex items-center justify-between space-x-4 p-4 rounded-xl bg-gradient-to-r from-white to-blue-50/30 border-2 border-blue-100 shadow-md hover:shadow-lg transition-shadow duration-200">
+                  <div className="rounded-2xl border-2 border-purple-50 bg-gradient-to-br from-white to-purple-50/30 p-6 space-y-6 shadow-sm backdrop-blur-sm">
+                    <div className="flex items-center justify-between space-x-4 p-5 rounded-xl bg-white/70 border-2 border-purple-50 shadow-sm hover:shadow-md hover:border-purple-100 transition-all duration-300 backdrop-blur-sm">
                       <div className="flex items-center gap-4 flex-1">
                         <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg ring-2 ring-emerald-200/50 flex-shrink-0">
                           <Check className="h-6 w-6 text-emerald-900 drop-shadow-sm" />
@@ -990,7 +990,7 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                           })
                         }
                         disabled={!trialPolicyForm.enabled}
-                        className="text-lg font-bold h-14 border-2 border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-300/50 bg-white shadow-sm"
+                        className="text-lg font-bold h-14 border-2 border-purple-100 focus:border-purple-400 focus:ring-2 focus:ring-purple-200/50 bg-white/80 shadow-sm transition-all duration-200 hover:border-purple-200"
                         placeholder="90"
                       />
                       <p className="text-xs text-muted-foreground mt-3 flex items-center gap-2 p-2 rounded-lg bg-blue-50/50 border border-blue-100">
@@ -999,7 +999,7 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between space-x-4 p-4 rounded-xl bg-gradient-to-r from-white to-orange-50/30 border-2 border-orange-100 shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <div className="flex items-center justify-between space-x-4 p-5 rounded-xl bg-white/70 border-2 border-orange-50 shadow-sm hover:shadow-md hover:border-orange-100 transition-all duration-300 backdrop-blur-sm">
                       <div className="flex items-center gap-4 flex-1">
                         <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg ring-2 ring-orange-200/50 flex-shrink-0">
                           <TrendingUp className="h-6 w-6 text-orange-900 drop-shadow-sm" />
@@ -1205,7 +1205,7 @@ export function ApplicationDetails({ application, onBack, onUpdate }: Applicatio
                             </div>
                           </TableCell>
                           <TableCell className="py-4">
-                            <code className="inline-flex items-center text-xs bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 px-3 py-1.5 rounded-lg border border-gray-300 font-mono font-semibold shadow-sm">
+                            <code className="inline-flex items-center text-xs bg-yellow-500 hover-bg-yellow-100 text-gray-800 px-3 py-1.5 rounded-lg border border-yellow-300 font-mono font-semibold shadow-sm">
                               {feature.key}
                             </code>
                           </TableCell>

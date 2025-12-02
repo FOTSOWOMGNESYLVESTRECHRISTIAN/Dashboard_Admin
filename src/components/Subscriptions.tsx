@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
@@ -14,6 +14,8 @@ import {
   Layers,
   CreditCard as CreditCardIcon,
   Activity,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Select,
@@ -23,6 +25,8 @@ import {
   SelectValue,
 } from "./ui/select";
 import { SubscriptionDetails, Subscription } from "./SubscriptionDetails";
+import { subscriptionService } from "../services/subscriptionService";
+import { toast } from "sonner";
 
 const statusColors = {
   active: "bg-green-600",
@@ -36,280 +40,7 @@ const statusLabels = {
   cancelled: "Annulé",
 };
 
-const mockSubscriptions: Subscription[] = [
-  {
-    id: "1",
-    contextName: "Équipe Marketing TechCorp",
-    numberOfPeople: 3,
-    people: [
-      { id: "p1", name: "Marie Dupont", email: "marie.dupont@techcorp.com" },
-      { id: "p2", name: "Jean Martin", email: "jean.martin@techcorp.com" },
-      { id: "p3", name: "Sophie Bernard", email: "sophie.bernard@techcorp.com" },
-    ],
-    application: "TaskMaster Pro",
-    applicationId: "1",
-    plans: [
-      {
-        planId: "2",
-        planName: "Premium",
-        interval: "month",
-        price: 19.99,
-        currency: "EUR",
-        features: [
-          { featureId: "1", featureName: "Tâches illimitées", limit: null },
-          { featureId: "2", featureName: "Collaboration en temps réel", limit: null },
-          { featureId: "3", featureName: "Export PDF", limit: null },
-        ],
-      },
-    ],
-    promotionCode: "PREMIUM20",
-    promotionPrice: 15.99,
-    originalPrice: 19.99,
-    finalPrice: 15.99,
-    currency: "EUR",
-    status: "active",
-    startDate: "2024-01-15",
-    endDate: "2025-01-15",
-  },
-  {
-    id: "2",
-    contextName: "Startup Innovante",
-    numberOfPeople: 2,
-    people: [
-      { id: "p4", name: "Alexandre Leroy", email: "alexandre@startup.com" },
-      { id: "p5", name: "Camille Petit", email: "camille@startup.com" },
-    ],
-    application: "SocialHub",
-    applicationId: "3",
-    plans: [
-      {
-        planId: "6",
-        planName: "Pro",
-        interval: "month",
-        price: 14.99,
-        currency: "EUR",
-        features: [
-          { featureId: "8", featureName: "Publications illimitées", limit: null },
-          { featureId: "9", featureName: "Partage multimédia", limit: null },
-        ],
-      },
-    ],
-    promotionCode: null,
-    promotionPrice: null,
-    originalPrice: 14.99,
-    finalPrice: 14.99,
-    currency: "EUR",
-    status: "active",
-    startDate: "2024-06-10",
-    endDate: "2024-12-10",
-  },
-  {
-    id: "3",
-    contextName: "Studio de Design",
-    numberOfPeople: 4,
-    people: [
-      { id: "p6", name: "Thomas Moreau", email: "thomas@studio-design.com" },
-      { id: "p7", name: "Julie Rousseau", email: "julie@studio-design.com" },
-      { id: "p8", name: "Lucas Dubois", email: "lucas@studio-design.com" },
-      { id: "p9", name: "Emma Laurent", email: "emma@studio-design.com" },
-    ],
-    application: "GameZone Ultra",
-    applicationId: "2",
-    plans: [
-      {
-        planId: "3",
-        planName: "Basique",
-        interval: "year",
-        price: 99.99,
-        currency: "EUR",
-        features: [
-          { featureId: "5", featureName: "Jeux multijoueurs", limit: 5, used: 5 },
-          { featureId: "6", featureName: "Chat en direct", limit: null },
-        ],
-      },
-      {
-        planId: "4",
-        planName: "Ultra",
-        interval: "month",
-        price: 29.99,
-        currency: "EUR",
-        features: [
-          { featureId: "5", featureName: "Jeux multijoueurs", limit: null },
-          { featureId: "7", featureName: "Classements", limit: null },
-        ],
-      },
-    ],
-    promotionCode: null,
-    promotionPrice: null,
-    originalPrice: 129.98,
-    finalPrice: 129.98,
-    currency: "EUR",
-    status: "active",
-    startDate: "2024-03-20",
-    endDate: "2025-03-20",
-  },
-  {
-    id: "4",
-    contextName: "Université Paris Tech",
-    numberOfPeople: 1,
-    people: [
-      { id: "p10", name: "Pierre Garnier", email: "pierre.garnier@univ-paris-tech.fr" },
-    ],
-    application: "LearnPlus",
-    applicationId: "4",
-    plans: [
-      {
-        planId: "1",
-        planName: "Gratuit",
-        interval: "month",
-        price: 0,
-        currency: "EUR",
-        features: [
-          { featureId: "1", featureName: "Tâches illimitées", limit: 10, used: 8 },
-        ],
-      },
-    ],
-    promotionCode: null,
-    promotionPrice: null,
-    originalPrice: 0,
-    finalPrice: 0,
-    currency: "EUR",
-    status: "expired",
-    startDate: "2023-09-05",
-    endDate: "2024-09-05",
-  },
-  {
-    id: "5",
-    contextName: "Gamer Pro",
-    numberOfPeople: 1,
-    people: [
-      { id: "p11", name: "Nicolas Lefebvre", email: "nicolas@gamerpro.com" },
-    ],
-    application: "GameZone Ultra",
-    applicationId: "2",
-    plans: [
-      {
-        planId: "4",
-        planName: "Ultra",
-        interval: "month",
-        price: 29.99,
-        currency: "EUR",
-        features: [
-          { featureId: "5", featureName: "Jeux multijoueurs", limit: null },
-          { featureId: "6", featureName: "Chat en direct", limit: null },
-          { featureId: "7", featureName: "Classements", limit: null },
-        ],
-      },
-    ],
-    promotionCode: null,
-    promotionPrice: null,
-    originalPrice: 29.99,
-    finalPrice: 29.99,
-    currency: "EUR",
-    status: "cancelled",
-    startDate: "2024-02-14",
-    endDate: "2024-08-14",
-  },
-  {
-    id: "6",
-    contextName: "Famille Dubois",
-    numberOfPeople: 4,
-    people: [
-      { id: "p12", name: "Marc Dubois", email: "marc.dubois@email.com" },
-      { id: "p13", name: "Isabelle Dubois", email: "isabelle.dubois@email.com" },
-      { id: "p14", name: "Lucas Dubois", email: "lucas.dubois@email.com" },
-      { id: "p15", name: "Emma Dubois", email: "emma.dubois@email.com" },
-    ],
-    application: "TaskMaster Pro",
-    applicationId: "1",
-    plans: [
-      {
-        planId: "1",
-        planName: "Gratuit",
-        interval: "month",
-        price: 0,
-        currency: "EUR",
-        features: [
-          { featureId: "1", featureName: "Tâches illimitées", limit: 10, used: 10 },
-          { featureId: "2", featureName: "Collaboration en temps réel", limit: null },
-        ],
-      },
-    ],
-    promotionCode: null,
-    promotionPrice: null,
-    originalPrice: 0,
-    finalPrice: 0,
-    currency: "EUR",
-    status: "active",
-    startDate: "2024-10-01",
-    endDate: "2025-10-01",
-  },
-  {
-    id: "7",
-    contextName: "Fitness Enthusiast",
-    numberOfPeople: 1,
-    people: [
-      { id: "p16", name: "Sarah Moreau", email: "sarah@fitness.com" },
-    ],
-    application: "FitTracker",
-    applicationId: "5",
-    plans: [
-      {
-        planId: "2",
-        planName: "Premium",
-        interval: "year",
-        price: 199.99,
-        currency: "EUR",
-        features: [
-          { featureId: "1", featureName: "Tâches illimitées", limit: null },
-        ],
-      },
-    ],
-    promotionCode: null,
-    promotionPrice: null,
-    originalPrice: 199.99,
-    finalPrice: 199.99,
-    currency: "EUR",
-    status: "active",
-    startDate: "2024-07-22",
-    endDate: "2025-07-22",
-  },
-  {
-    id: "8",
-    contextName: "Entreprise TechNova",
-    numberOfPeople: 4,
-    people: [
-      { id: "p17", name: "David Chen", email: "david.chen@technova.com" },
-      { id: "p18", name: "Laura Martinez", email: "laura.martinez@technova.com" },
-      { id: "p19", name: "Antoine Blanc", email: "antoine.blanc@technova.com" },
-      { id: "p20", name: "Clara Simon", email: "clara.simon@technova.com" },
-    ],
-    application: "SocialHub",
-    applicationId: "3",
-    plans: [
-      {
-        planId: "6",
-        planName: "Pro",
-        interval: "year",
-        price: 149.99,
-        currency: "EUR",
-        features: [
-          { featureId: "8", featureName: "Publications illimitées", limit: null },
-          { featureId: "9", featureName: "Partage multimédia", limit: null },
-          { featureId: "10", featureName: "Statistiques avancées", limit: null },
-        ],
-      },
-    ],
-    promotionCode: "SOCIAL15",
-    promotionPrice: 127.49,
-    originalPrice: 149.99,
-    finalPrice: 127.49,
-    currency: "EUR",
-    status: "active",
-    startDate: "2024-04-18",
-    endDate: "2025-04-18",
-  },
-];
+// Les données sont maintenant récupérées depuis l'API via subscriptionService
 
 interface SubscriptionsProps {
   onViewDetails?: (subscription: Subscription) => void;
@@ -318,7 +49,54 @@ interface SubscriptionsProps {
 export function Subscriptions({ onViewDetails }: SubscriptionsProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [subscriptions] = useState<Subscription[]>(mockSubscriptions);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+  const size = 10;
+
+  const loadSubscriptions = useCallback(async (pageNum: number = 0) => {
+    setIsLoading(true);
+    try {
+      const result = await subscriptionService.getAllSubscriptions(pageNum, size);
+      setSubscriptions(result.content);
+      setPage(result.page);
+      setTotalPages(result.totalPages);
+      setTotalElements(result.totalElements);
+    } catch (error: any) {
+      console.error("[Subscriptions] Error loading subscriptions:", error);
+      
+      // Message spécifique pour l'erreur 403
+      if (error?.code === "FORBIDDEN" || error?.status === 403 || error?.message?.includes("403")) {
+        toast.error(
+          "Accès refusé. Veuillez vérifier que vous avez les permissions nécessaires pour consulter les souscriptions."
+        );
+      } else {
+        toast.error(error?.message || "Impossible de charger les souscriptions");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [size]);
+
+  useEffect(() => {
+    loadSubscriptions(page);
+  }, [page, loadSubscriptions]);
+
+  // Compter le nombre de personnes par contexte
+  const getPeopleCountByContext = useMemo(() => {
+    const contextCounts: Record<string, number> = {};
+    subscriptions.forEach((sub) => {
+      if (!contextCounts[sub.contextName]) {
+        contextCounts[sub.contextName] = 0;
+      }
+      // Pour l'instant, on compte 1 personne par subscription avec le même contexte
+      // Cette logique peut être améliorée si l'API fournit le nombre réel de personnes
+      contextCounts[sub.contextName] += 1;
+    });
+    return contextCounts;
+  }, [subscriptions]);
 
   const filteredSubscriptions = subscriptions.filter((sub) => {
     const matchesSearch =
@@ -346,22 +124,24 @@ export function Subscriptions({ onViewDetails }: SubscriptionsProps) {
   };
 
   const formatPrice = (price: number, currency: string) => {
-    return `${price.toFixed(2)} ${currency}`;
+    // Remplacer EUR par XFA
+    const displayCurrency = currency === "EUR" ? "XFA" : currency;
+    return `${price.toFixed(2)} ${displayCurrency}`;
   };
 
   return (
     <div className="space-y-6 h-full flex flex-col overflow-hidden">
       {/* En-tête */}
-      <div className="border-b border-yellow-500 pb-4 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h2 className="text-gray-900">Subscriptions</h2>
-          <p className="text-gray-600">
+      <div className="border-b border-yellow-500 pb-4 flex items-center justify-between flex-shrink-0 min-h-[80px]">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-gray-900 font-semibold text-xl">Subscriptions</h2>
+          <p className="text-gray-600 text-sm mt-1">
             Gérez et suivez toutes les subscriptions avec une vision unifiée des statuts, des plans et des revenus.
           </p>
         </div>
         <Button
           variant="outline"
-          className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-0"
+          className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-0 flex-shrink-0 ml-4 h-[40px]"
         >
           <Download className="mr-2 h-4 w-4" />
           Exporter
@@ -370,56 +150,56 @@ export function Subscriptions({ onViewDetails }: SubscriptionsProps) {
 
       {/* Cartes de statistiques */}
       <div className="grid gap-6 md:grid-cols-3 flex-shrink-0">
-        <Card className="border-0 shadow-md overflow-hidden relative">
+        <Card className="border-0 shadow-md overflow-hidden relative h-[140px]">
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-          <CardContent className="pt-6">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
+          <CardContent className="pt-6 h-full">
+            <div className="space-y-3 h-full flex flex-col">
+              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
                 <Layers className="h-6 w-6 text-blue-600" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl text-gray-900">{filteredSubscriptions.length}</span>
+                  <span className="text-3xl text-gray-900 font-semibold">{filteredSubscriptions.length}</span>
                 </div>
                 <p className="text-sm text-gray-600">Tous contextes confondus</p>
               </div>
-              <p className="text-sm text-gray-700">Total Subscriptions</p>
+              <p className="text-sm text-gray-700 font-medium flex-shrink-0">Total Subscriptions</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md overflow-hidden relative">
+        <Card className="border-0 shadow-md overflow-hidden relative h-[140px]">
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-          <CardContent className="pt-6">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
+          <CardContent className="pt-6 h-full">
+            <div className="space-y-3 h-full flex flex-col">
+              <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
                 <Activity className="h-6 w-6 text-green-600" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl text-gray-900">{activeCount}</span>
+                  <span className="text-3xl text-gray-900 font-semibold">{activeCount}</span>
                 </div>
                 <p className="text-sm text-gray-600">Toujours facturées</p>
               </div>
-              <p className="text-sm text-gray-700">Subscriptions Actives</p>
+              <p className="text-sm text-gray-700 font-medium flex-shrink-0">Subscriptions Actives</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md overflow-hidden relative">
+        <Card className="border-0 shadow-md overflow-hidden relative h-[140px]">
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-          <CardContent className="pt-6">
-            <div className="space-y-3">
-              <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center">
+          <CardContent className="pt-6 h-full">
+            <div className="space-y-3 h-full flex flex-col">
+              <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
                 <CreditCardIcon className="h-6 w-6 text-orange-600" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl text-gray-900">{formatPrice(totalFinalPrice, "EUR")}</span>
+                  <span className="text-3xl text-gray-900 font-semibold">{formatPrice(totalFinalPrice, "XFA")}</span>
                 </div>
                 <p className="text-sm text-gray-600">{cancelledCount} résiliation(s) détectée(s)</p>
               </div>
-              <p className="text-sm text-gray-700">Revenu total (Actif)</p>
+              <p className="text-sm text-gray-700 font-medium flex-shrink-0">Revenu total (Actif)</p>
             </div>
           </CardContent>
         </Card>
@@ -428,29 +208,29 @@ export function Subscriptions({ onViewDetails }: SubscriptionsProps) {
       {/* Carte principale */}
       <Card className="border-0 shadow-md overflow-hidden relative flex-1 flex flex-col">
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500"></div>
-        <CardHeader className="flex-shrink-0">
+        <CardHeader className="flex-shrink-0 min-h-[80px]">
           <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
-              <CardTitle className="text-gray-900">Liste des Subscriptions</CardTitle>
-              <CardDescription className="text-gray-600">
-                {filteredSubscriptions.length} subscription(s) trouvée(s)
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-gray-900 font-semibold text-lg">Liste des Subscriptions</CardTitle>
+              <CardDescription className="text-gray-600 text-sm mt-1">
+                {totalElements} subscription(s) au total • {filteredSubscriptions.length} affichée(s)
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex flex-wrap gap-4 mb-4 flex-shrink-0">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-wrap gap-4 mb-4 flex-shrink-0 h-[44px]">
+            <div className="relative flex-1 min-w-[220px] h-[44px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
               <Input
                 placeholder="Rechercher par contexte ou application..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-[44px]"
               />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[200px] h-[44px]">
                 <Filter className="mr-2 h-4 w-4" />
                 <SelectValue placeholder="Statut" />
               </SelectTrigger>
@@ -464,84 +244,102 @@ export function Subscriptions({ onViewDetails }: SubscriptionsProps) {
           </div>
 
           <div className="rounded-md border overflow-hidden flex-1 min-h-0">
-            <div className="h-full overflow-y-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-0">
-                  <TableRow>
-                    <TableHead className="whitespace-nowrap min-w-[180px]">Contexte</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[120px]">Personnes</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[140px]">Application</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[140px]">Plans</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[100px]">Statut</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[120px]">Date début</TableHead>
-                    <TableHead className="whitespace-nowrap min-w-[120px]">Date fin</TableHead>
-                    <TableHead className="text-right whitespace-nowrap min-w-[120px]">Prix original</TableHead>
-                    <TableHead className="text-right whitespace-nowrap min-w-[130px]">Prix promo</TableHead>
-                    <TableHead className="text-right whitespace-nowrap min-w-[120px]">Prix final</TableHead>
-                    <TableHead className="text-right whitespace-nowrap min-w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSubscriptions.map((sub) => (
+            <div className="h-full overflow-y-auto overflow-x-auto">
+              {isLoading ? (
+                <div className="text-center py-12 text-muted-foreground min-h-[200px] flex items-center justify-center">
+                  Chargement des souscriptions...
+                </div>
+              ) : filteredSubscriptions.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground min-h-[200px] flex items-center justify-center">
+                  Aucune souscription trouvée
+                </div>
+              ) : (
+                <Table className="table-fixed w-full min-w-[1400px]">
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead className="whitespace-nowrap w-[180px]">Contexte</TableHead>
+                      <TableHead className="whitespace-nowrap w-[120px]">Personnes</TableHead>
+                      <TableHead className="whitespace-nowrap w-[140px]">Application</TableHead>
+                      <TableHead className="whitespace-nowrap w-[140px]">Plans</TableHead>
+                      <TableHead className="whitespace-nowrap w-[100px]">Statut</TableHead>
+                      <TableHead className="whitespace-nowrap w-[120px]">Date début</TableHead>
+                      <TableHead className="whitespace-nowrap w-[120px]">Date fin</TableHead>
+                      <TableHead className="text-right whitespace-nowrap w-[120px]">Prix original</TableHead>
+                      <TableHead className="text-right whitespace-nowrap w-[130px]">Prix promo</TableHead>
+                      <TableHead className="text-right whitespace-nowrap w-[120px]">Prix final</TableHead>
+                      <TableHead className="text-right whitespace-nowrap w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSubscriptions.map((sub) => (
                     <TableRow key={sub.id}>
-                      <TableCell className="font-semibold text-gray-900">
-                        {sub.contextName}
+                      <TableCell className="font-semibold text-gray-900 w-[180px] overflow-hidden text-ellipsis">
+                        <span className="block truncate">{sub.contextName}</span>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <span>{sub.numberOfPeople}</span>
-                        </div>
+                      <TableCell className="w-[120px]">
+                        {(() => {
+                          const count = getPeopleCountByContext[sub.contextName] || sub.numberOfPeople || 0;
+                          return count > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <span>{count}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          );
+                        })()}
                       </TableCell>
-                      <TableCell className="font-medium">{sub.application}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
+                      <TableCell className="font-medium w-[140px] overflow-hidden text-ellipsis">
+                        <span className="block truncate">{sub.application}</span>
+                      </TableCell>
+                      <TableCell className="w-[140px]">
+                        <div className="flex flex-wrap gap-1 max-w-full">
                           {sub.plans.map((plan, index) => (
                             <Badge
                               key={index}
                               variant="outline"
-                              className="text-xs"
+                              className="text-xs truncate max-w-full"
                             >
-                              {plan.planName}
+                              <span className="truncate block">{plan.planName}</span>
                             </Badge>
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="w-[100px]">
                         <Badge
                           variant="secondary"
-                          className={`${statusColors[sub.status]} text-white`}
+                          className={`${statusColors[sub.status]} text-white whitespace-nowrap`}
                         >
                           {statusLabels[sub.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="w-[120px] whitespace-nowrap">
                         {new Date(sub.startDate).toLocaleDateString("fr-FR", {
                           day: "2-digit",
                           month: "2-digit",
                           year: "numeric",
                         })}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="w-[120px] whitespace-nowrap">
                         {new Date(sub.endDate).toLocaleDateString("fr-FR", {
                           day: "2-digit",
                           month: "2-digit",
                           year: "numeric",
                         })}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell className="text-right text-muted-foreground w-[120px] whitespace-nowrap">
                         {formatPrice(sub.originalPrice, sub.currency)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right w-[130px]">
                         {sub.promotionPrice !== null ? (
                           <div className="flex flex-col items-end gap-1">
-                            <span className="font-semibold text-orange-600">
+                            <span className="font-semibold text-orange-600 whitespace-nowrap">
                               {formatPrice(sub.promotionPrice, sub.currency)}
                             </span>
                             {sub.promotionCode && (
-                              <Badge variant="default" className="bg-orange-500 text-xs">
-                                <Tag className="mr-1 h-3 w-3" />
-                                {sub.promotionCode}
+                              <Badge variant="default" className="bg-orange-500 text-xs whitespace-nowrap">
+                                <Tag className="mr-1 h-3 w-3 inline" />
+                                <span className="truncate">{sub.promotionCode}</span>
                               </Badge>
                             )}
                           </div>
@@ -549,24 +347,62 @@ export function Subscriptions({ onViewDetails }: SubscriptionsProps) {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="text-right font-semibold w-[120px] whitespace-nowrap">
                         {formatPrice(sub.finalPrice, sub.currency)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right w-[100px]">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleViewDetails(sub)}
-                          className="h-8 w-8 p-0"
+                          className="h-8 w-8 p-0 flex-shrink-0"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-6 py-4 border-t flex-shrink-0 h-[68px]">
+            {!isLoading && totalPages > 1 ? (
+              <>
+                <div className="text-sm text-muted-foreground whitespace-nowrap">
+                  Page {page + 1} sur {totalPages} • {totalElements} souscription(s)
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0 || isLoading}
+                    className="h-9"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1 || isLoading}
+                    className="h-9"
+                  >
+                    Suivant
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground whitespace-nowrap">
+                {totalElements} souscription(s)
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
